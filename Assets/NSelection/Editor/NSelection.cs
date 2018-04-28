@@ -1,4 +1,6 @@
-﻿using System;
+﻿/*Thomas Ingram 2018*/
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -11,29 +13,6 @@ namespace Vertx
 	[InitializeOnLoad]
 	public class NSelection
 	{
-		#region Overlapping
-
-		static IEnumerable<GameObject> GetAllOverlapping(Vector2 position)
-		{
-			return (IEnumerable<GameObject>) getAllOverlapping.Invoke(null, new object[] {position});
-		}
-
-		[SerializeField] static MethodInfo _getAllOverlapping;
-
-		static MethodInfo getAllOverlapping
-		{
-			get { return _getAllOverlapping ?? (_getAllOverlapping = sceneViewPickingClass.GetMethod("GetAllOverlapping", BindingFlags.Static | BindingFlags.NonPublic)); }
-		}
-
-		[SerializeField] static Type _sceneViewPickingClass;
-
-		static Type sceneViewPickingClass
-		{
-			get { return _sceneViewPickingClass ?? (_sceneViewPickingClass = Type.GetType("UnityEditor.SceneViewPicking,UnityEditor")); }
-		}
-
-		#endregion
-
 		static NSelection()
 		{
 			RefreshListeners();
@@ -50,14 +29,15 @@ namespace Vertx
 		private static GameObject[] totalSelection;
 
 		private static readonly HashSet<GameObject> currentSelectionHash = new HashSet<GameObject>();
+		private static readonly Dictionary<GameObject, Texture2D[]> objectToComponentIcons = new Dictionary<GameObject, Texture2D[]>();
 		private static bool isShiftSelection;
 		private static Vector2 selectionPosition;
 		private static float xOffset;
 		private static int scrollTarget;
 		private static float scrollPosition;
 
+		//Mini white label is used for highlighted content
 		private static GUIStyle _miniLabelWhite;
-
 		private static GUIStyle miniLabelWhite
 		{
 			get
@@ -74,8 +54,16 @@ namespace Vertx
 			}
 		}
 
-		private const float width = 200f;
+		private const float width = 250f;
 		private const float height = 16f;
+
+		private static Color boxBorderColor
+		{
+			get
+			{
+				return new Color(0,0,0,1);
+			}	
+		} 
 
 		static void OnSceneGUI(SceneView sceneView)
 		{
@@ -88,6 +76,7 @@ namespace Vertx
 					EditorGUIUtility.AddCursorRect(new Rect(0f, 17f, Screen.width, Screen.height - 17f), isShiftSelection || e.shift ? MouseCursor.ArrowPlus : MouseCursor.Arrow);
 					int indexCurrentlyHighlighted = -1;
 
+					//Scrolling behaviour
 					if (e.type == EventType.ScrollWheel)
 					{
 						scrollTarget += Math.Sign(e.delta.y);
@@ -102,6 +91,10 @@ namespace Vertx
 						if (Math.Abs(scrollPosition - scrollTarget) < 0.001f)
 							scrollPosition = scrollTarget;
 					}
+					//------------
+					
+					Rect seperatorTopRect = new Rect(selectionPosition.x + xOffset, selectionPosition.y - scrollPosition * height - height / 2f - 1, width, 1);
+					EditorGUI.DrawRect(seperatorTopRect, boxBorderColor);
 					
 					for (var i = 0; i < totalSelection.Length; i++)
 					{
@@ -115,6 +108,8 @@ namespace Vertx
 						if (contains)
 							indexCurrentlyHighlighted = i;
 
+						EditorGUI.DrawRect(boxRect, boxBorderColor);
+						
 						if (isInSelection)
 						{
 							if (contains) //Going to Deselect
@@ -137,14 +132,22 @@ namespace Vertx
 							}
 						}
 
-						GUI.Box(boxRect, GUIContent.none);
+						Rect innerBoxRect = new Rect(boxRect.x + 1, boxRect.y, boxRect.width -2, boxRect.height -1);
+						EditorGUI.DrawRect(innerBoxRect, GUI.color);
 						GUI.color = Color.white;
-						GUI.Label(new Rect(boxRect.x + 25, boxRect.y, width - 25, boxRect.height), gameObject.name, labelStyle);
+						GUI.Label(new Rect(boxRect.x + 20, boxRect.y, width - 20, boxRect.height), gameObject.name, labelStyle);
+						
+						Texture2D[] icons;
+						if (objectToComponentIcons.TryGetValue(gameObject, out icons))
+						{
+							for (var j = 0; j < icons.Length; j++)
+							{
+								Texture2D icon = icons[j];
+								GUI.Label(new Rect(boxRect.x + boxRect.width - (icons.Length - j) * height, boxRect.y, height, height), icon);
+							}
+						}
 
-
-						if (contains && e.isMouse && e.type == EventType.MouseDown)
-							e.Use();
-
+						//Clicked in the box!
 						if (contains && e.isMouse && e.type == EventType.MouseUp)
 						{
 							MakeSelection(i, e.shift);
@@ -188,15 +191,31 @@ namespace Vertx
 						break;
 				}
 
+				//The actual CTRL+RIGHT-MOUSE functionality
 				if (mouseRightIsDownWithoutDrag && e.rawType == EventType.MouseUp)
 				{
 					isShiftSelection = e.shift;
 					totalSelection = GetAllOverlapping(e.mousePosition).ToArray();
+					
+					objectToComponentIcons.Clear();
+					foreach (GameObject gO in totalSelection)
+					{
+						Component[] cS = gO.GetComponents<Component>();
+						Texture2D[] icons = new Texture2D[cS.Length-1];
+						for (var i = 1; i < cS.Length; i++)
+						{
+							//Skip the Transform component because it's always the first object
+							icons[i-1] = AssetPreview.GetMiniThumbnail(cS[i]);
+						}
+						objectToComponentIcons.Add(gO, icons);
+					}
+					
 					selectionPosition = e.mousePosition;
 					e.alt = false;
 					mouseRightIsDownWithoutDrag = false;
 					RefreshSelectionHash();
 
+					//Screen-rect limits offset
 					if (selectionPosition.x + width > sceneView.position.width)
 						xOffset = -width;
 					else
@@ -204,6 +223,7 @@ namespace Vertx
 					int value = Mathf.CeilToInt(((selectionPosition.y + height * totalSelection.Length) - sceneView.position.height + 10)/height);
 					scrollTarget = Mathf.Max(0, value);
 					scrollPosition = scrollTarget;
+					//------------------
 					
 					e.Use();
 				}
@@ -241,6 +261,7 @@ namespace Vertx
 
 
 				Selection.objects = objects.ToArray();
+				isShiftSelection = true;
 			}
 			else
 				Selection.activeGameObject = !selectionContains ? gameObject : null;
@@ -251,5 +272,28 @@ namespace Vertx
 				RefreshSelectionHash();
 			SceneView.RepaintAll();
 		}
+		
+		#region Overlapping
+
+		static IEnumerable<GameObject> GetAllOverlapping(Vector2 position)
+		{
+			return (IEnumerable<GameObject>) getAllOverlapping.Invoke(null, new object[] {position});
+		}
+
+		[SerializeField] static MethodInfo _getAllOverlapping;
+
+		static MethodInfo getAllOverlapping
+		{
+			get { return _getAllOverlapping ?? (_getAllOverlapping = sceneViewPickingClass.GetMethod("GetAllOverlapping", BindingFlags.Static | BindingFlags.NonPublic)); }
+		}
+
+		[SerializeField] static Type _sceneViewPickingClass;
+
+		static Type sceneViewPickingClass
+		{
+			get { return _sceneViewPickingClass ?? (_sceneViewPickingClass = Type.GetType("UnityEditor.SceneViewPicking,UnityEditor")); }
+		}
+
+		#endregion
 	}
 }
