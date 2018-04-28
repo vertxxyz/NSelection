@@ -139,17 +139,21 @@ namespace Vertx
 
 						GUI.Box(boxRect, GUIContent.none);
 						GUI.color = Color.white;
-
 						GUI.Label(new Rect(selectionPosition.x + 25, selectionPosition.y + i * h - h / 2f, 200 - 25, h), gameObject.name, labelStyle);
 
 
 						if (contains && e.isMouse && e.type == EventType.MouseDown)
 						{
+							e.Use();
+						}
+
+						if (contains && e.isMouse && e.type == EventType.MouseUp)
+						{
 							bool shift = e.shift;
 							e.Use();
 							MakeSelection(i, shift);
-							//if (!shift)
-							break;
+							if (!shift)
+								break;
 						}
 					}
 
@@ -172,6 +176,9 @@ namespace Vertx
 					}
 
 					if (e.isMouse && e.type == EventType.MouseDown)
+					{
+						e.Use();
+					}else if (e.isMouse && e.type == EventType.MouseUp)
 					{
 						EndSelection();
 						e.Use();
@@ -230,7 +237,9 @@ namespace Vertx
 				else
 					objects.Remove(gameObject);
 
+				
 				Selection.objects = objects.ToArray();
+				
 			}
 			else
 				Selection.activeGameObject = !selectionContains ? gameObject : null;
