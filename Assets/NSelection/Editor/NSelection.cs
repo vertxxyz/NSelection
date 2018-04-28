@@ -34,27 +34,6 @@ namespace Vertx
 
 		#endregion
 
-		#region CustomMenu
-
-		static void DisplayCustomMenu(Rect r, string[] menuNames, int[] selected, EditorUtility.SelectMenuItemFunction callback, object userData)
-		{
-			displayCustomMenu.Invoke(null, new[] {r, menuNames, selected, callback, userData});
-		}
-
-		[SerializeField] static MethodInfo _displayCustomMenu;
-
-		static MethodInfo displayCustomMenu
-		{
-			get
-			{
-				return _displayCustomMenu ??
-				       (_displayCustomMenu = typeof(EditorUtility).GetMethod("DisplayCustomMenu", BindingFlags.Static | BindingFlags.NonPublic, null,
-					       new[] {typeof(Rect), typeof(string[]), typeof(int[]), typeof(EditorUtility.SelectMenuItemFunction), typeof(object)}, null));
-			}
-		}
-
-		#endregion
-
 		static NSelection()
 		{
 			RefreshListeners();
@@ -73,6 +52,9 @@ namespace Vertx
 		private static readonly HashSet<GameObject> currentSelectionHash = new HashSet<GameObject>();
 		private static bool isShiftSelection;
 		private static Vector2 selectionPosition;
+		private static float xOffset;
+		private static int scrollTarget;
+		private static float scrollPosition;
 
 		private static GUIStyle _miniLabelWhite;
 
@@ -92,7 +74,9 @@ namespace Vertx
 			}
 		}
 
-		private bool useUntilRepaint;
+		private const float width = 200f;
+		private const float height = 16f;
+
 		static void OnSceneGUI(SceneView sceneView)
 		{
 			Event e = Event.current;
@@ -102,12 +86,28 @@ namespace Vertx
 				if (totalSelection != null && totalSelection.Length > 0)
 				{
 					EditorGUIUtility.AddCursorRect(new Rect(0f, 17f, Screen.width, Screen.height - 17f), isShiftSelection || e.shift ? MouseCursor.ArrowPlus : MouseCursor.Arrow);
-					float h = EditorGUIUtility.singleLineHeight;
 					int indexCurrentlyHighlighted = -1;
+
+					if (e.type == EventType.ScrollWheel)
+					{
+						scrollTarget += Math.Sign(e.delta.y);
+						scrollTarget = Mathf.Clamp(scrollTarget, 0, totalSelection.Length-1);
+						e.Use();
+					}
+
+					// ReSharper disable once CompareOfFloatsByEqualityOperator
+					if (scrollPosition != scrollTarget)
+					{
+						scrollPosition = Mathf.Lerp(scrollPosition, scrollTarget, Time.deltaTime * 10);
+						if (Math.Abs(scrollPosition - scrollTarget) < 0.001f)
+							scrollPosition = scrollTarget;
+					}
+					
 					for (var i = 0; i < totalSelection.Length; i++)
 					{
 						GameObject gameObject = totalSelection[i];
-						Rect boxRect = new Rect(selectionPosition.x, selectionPosition.y + i * h - h / 2f, 200, h);
+						
+						Rect boxRect = new Rect(selectionPosition.x + xOffset, selectionPosition.y + i * height - scrollPosition * height - height / 2f, width, height);
 						GUIStyle labelStyle;
 
 						bool isInSelection = currentSelectionHash.Contains(gameObject);
@@ -117,20 +117,20 @@ namespace Vertx
 
 						if (isInSelection)
 						{
-							if(contains)	//Going to Deselect
+							if (contains) //Going to Deselect
 								GUI.color = new Color(0.58f, 0.62f, 0.75f);
-							else			//Is In Selection
+							else //Is In Selection
 								GUI.color = new Color(0f, 0.5f, 1f);
 							labelStyle = miniLabelWhite;
 						}
 						else
 						{
-							if (contains)	//Going To Select
+							if (contains) //Going To Select
 							{
 								GUI.color = new Color(0f, 0.5f, 1f);
 								labelStyle = miniLabelWhite;
 							}
-							else			//Not In Selection
+							else //Not In Selection
 							{
 								GUI.color = Color.white;
 								labelStyle = EditorStyles.miniLabel;
@@ -139,50 +139,39 @@ namespace Vertx
 
 						GUI.Box(boxRect, GUIContent.none);
 						GUI.color = Color.white;
-						GUI.Label(new Rect(selectionPosition.x + 25, selectionPosition.y + i * h - h / 2f, 200 - 25, h), gameObject.name, labelStyle);
+						GUI.Label(new Rect(boxRect.x + 25, boxRect.y, width - 25, boxRect.height), gameObject.name, labelStyle);
 
 
 						if (contains && e.isMouse && e.type == EventType.MouseDown)
-						{
 							e.Use();
-						}
 
 						if (contains && e.isMouse && e.type == EventType.MouseUp)
 						{
-							bool shift = e.shift;
+							MakeSelection(i, e.shift);
 							e.Use();
-							MakeSelection(i, shift);
-							if (!shift)
+							if (!e.shift)
 								break;
 						}
 					}
+
 
 					if (e.isKey && e.type == EventType.KeyUp)
 					{
 						switch (e.keyCode)
 						{
 							case KeyCode.Escape:
-								
 								EndSelection();
-								e.Use();
 								break;
 							case KeyCode.Return:
-								bool shift = e.shift;
-								e.Use();
-								if(indexCurrentlyHighlighted>=0)
-									MakeSelection(indexCurrentlyHighlighted, shift);
+								if (indexCurrentlyHighlighted >= 0)
+									MakeSelection(indexCurrentlyHighlighted, e.shift);
 								break;
 						}
-					}
-
-					if (e.isMouse && e.type == EventType.MouseDown)
-					{
-						e.Use();
-					}else if (e.isMouse && e.type == EventType.MouseUp)
-					{
+					} else if (e.isMouse && e.type == EventType.MouseUp)
 						EndSelection();
+
+					if (e.type != EventType.Repaint && e.type != EventType.Layout)
 						e.Use();
-					}
 				}
 			}
 			Handles.EndGUI();
@@ -207,6 +196,15 @@ namespace Vertx
 					e.alt = false;
 					mouseRightIsDownWithoutDrag = false;
 					RefreshSelectionHash();
+
+					if (selectionPosition.x + width > sceneView.position.width)
+						xOffset = -width;
+					else
+						xOffset = 0;
+					int value = Mathf.CeilToInt(((selectionPosition.y + height * totalSelection.Length) - sceneView.position.height + 10)/height);
+					scrollTarget = Mathf.Max(0, value);
+					scrollPosition = scrollTarget;
+					
 					e.Use();
 				}
 			}
@@ -214,8 +212,12 @@ namespace Vertx
 
 		static void EndSelection()
 		{
+			scrollTarget = 0;
+			scrollPosition = 0;
 			totalSelection = null;
 			currentSelectionHash.Clear();
+			GUIUtility.hotControl = 0;
+			SceneView.RepaintAll();
 		}
 
 		static void RefreshSelectionHash()
@@ -237,9 +239,8 @@ namespace Vertx
 				else
 					objects.Remove(gameObject);
 
-				
+
 				Selection.objects = objects.ToArray();
-				
 			}
 			else
 				Selection.activeGameObject = !selectionContains ? gameObject : null;
