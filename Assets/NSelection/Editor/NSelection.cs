@@ -56,6 +56,7 @@ namespace Vertx
 
 		private const float width = 250f;
 		private const float height = 16f;
+		private const int maxIcons = 7;
 
 		private static Color boxBorderColor
 		{
@@ -140,10 +141,11 @@ namespace Vertx
 						Texture2D[] icons;
 						if (objectToComponentIcons.TryGetValue(gameObject, out icons))
 						{
-							for (var j = 0; j < icons.Length; j++)
+							int maxLength = Mathf.Min(maxIcons, icons.Length);
+							for (var j = 0; j < maxLength; j++)
 							{
 								Texture2D icon = icons[j];
-								GUI.Label(new Rect(boxRect.x + boxRect.width - (icons.Length - j) * height, boxRect.y, height, height), icon);
+								GUI.Label(new Rect(boxRect.x + boxRect.width - (maxLength - j) * height, boxRect.y, height, height), icon);
 							}
 						}
 
