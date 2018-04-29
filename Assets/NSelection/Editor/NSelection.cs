@@ -287,7 +287,7 @@ namespace Vertx
 					if (contains && maxLength < iconsLocal.Length)
 					{
 						float max = iconsLocal.Length - maxLength;
-						iconsOffsets[i] = Mathf.MoveTowards(iconsOffsets[i], iconsOffsetTargets[i], Time.deltaTime * 0.01f);
+						iconsOffsets[i] = Mathf.MoveTowards(iconsOffsets[i], iconsOffsetTargets[i], (float)(EditorApplication.timeSinceStartup-lastTime));
 						if (iconsOffsets[i] <= 0)
 						{
 							iconsOffsets[i] = 0;
@@ -346,7 +346,11 @@ namespace Vertx
 			Focus();
 
 			Repaint();
+			
+			lastTime = EditorApplication.timeSinceStartup;
 		}
+
+		private double lastTime;
 
 		void EndSelection()
 		{
