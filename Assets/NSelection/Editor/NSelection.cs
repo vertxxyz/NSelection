@@ -51,9 +51,12 @@ namespace Vertx
 					SelectionPopup.isShiftSelection = e.shift;
 					SelectionPopup.totalSelection = GetAllOverlapping(e.mousePosition).ToArray();
 
-					SelectionPopup.objectToComponentIcons.Clear();
-					foreach (GameObject gO in SelectionPopup.totalSelection)
+					SelectionPopup.icons = new Texture2D[SelectionPopup.totalSelection.Length][];
+					SelectionPopup.iconsOffsets = new float[SelectionPopup.totalSelection.Length];
+					SelectionPopup.iconsOffsetTargets = new float[SelectionPopup.totalSelection.Length];
+					for (var t = 0; t < SelectionPopup.totalSelection.Length; t++)
 					{
+						GameObject gO = SelectionPopup.totalSelection[t];
 						Component[] cS = gO.GetComponents<Component>();
 						Texture2D[] icons = new Texture2D[cS.Length - 1];
 						for (var i = 1; i < cS.Length; i++)
@@ -62,7 +65,9 @@ namespace Vertx
 							icons[i - 1] = AssetPreview.GetMiniThumbnail(cS[i]);
 						}
 
-						SelectionPopup.objectToComponentIcons.Add(gO, icons);
+						SelectionPopup.icons[t] = icons;
+						SelectionPopup.iconsOffsets[t] = 0;
+						SelectionPopup.iconsOffsetTargets[t] = 0;
 					}
 
 					Vector2 selectionPosition = e.mousePosition;
@@ -81,8 +86,8 @@ namespace Vertx
 							sceneView.position.y + e.mousePosition.y + height / 2f,
 							width,
 							height * SelectionPopup.totalSelection.Length + 1
-							)
-						);
+						)
+					);
 					if (popup == null)
 					{
 						e.Use();
@@ -93,7 +98,6 @@ namespace Vertx
 					e.alt = false;
 					mouseRightIsDownWithoutDrag = false;
 					SelectionPopup.RefreshSelectionHash();
-					//------------------
 
 					e.Use();
 				}
@@ -129,11 +133,12 @@ namespace Vertx
 		public static GameObject[] totalSelection;
 
 		private static readonly HashSet<GameObject> currentSelectionHash = new HashSet<GameObject>();
-		public static readonly Dictionary<GameObject, Texture2D[]> objectToComponentIcons = new Dictionary<GameObject, Texture2D[]>();
+		public static Texture2D[][] icons;
+		public static float[] iconsOffsets;
+		public static float[] iconsOffsetTargets;
 
 		public static bool isShiftSelection;
 
-//		private static Vector2 selectionPosition;
 		private static float xOffset;
 		public static float scrollPosition;
 		private static Vector2 originalPosition;
@@ -143,9 +148,6 @@ namespace Vertx
 		{
 			get { return new Color(0, 0, 0, 1); }
 		}
-
-		private static readonly Texture2D shurikenPlus = EditorGUIUtility.FindTexture("ShurikenPlus");
-
 
 		//Mini white label is used for highlighted content
 		private static GUIStyle _miniLabelWhite;
@@ -188,10 +190,10 @@ namespace Vertx
 			if (e.type != EventType.Repaint && e.type != EventType.Layout)
 			{
 				if (e.type == EventType.ScrollWheel)
+				{
 					scrollDelta = Math.Sign(e.delta.y);
-				
-				if(e.type == EventType.MouseDown || e.type == EventType.MouseUp)
-					Debug.Log("Hey");
+				}
+
 				e.Use();
 			}
 		}
@@ -200,15 +202,11 @@ namespace Vertx
 		{
 			SceneView.onSceneGUIDelegate -= CaptureEvents;
 			Object[] objects = Selection.objects;
-			EditorApplication.delayCall += () =>
-			{
-				Debug.Log(Selection.objects.Length);
-				Selection.objects = objects;
-			};
+			EditorApplication.delayCall += () => { Selection.objects = objects; };
 		}
 
 		private int scrollDelta;
-		
+
 		void OnGUI()
 		{
 			Event e = Event.current;
@@ -219,7 +217,7 @@ namespace Vertx
 			//Scrolling behaviour
 			if (e.type == EventType.ScrollWheel)
 				scrollDelta = Math.Sign(e.delta.y);
-			
+
 			if (scrollDelta != 0)
 			{
 				scrollPosition += scrollDelta;
@@ -274,23 +272,41 @@ namespace Vertx
 				GUI.color = Color.white;
 				GUI.Label(new Rect(boxRect.x + 20, boxRect.y, NSelection.width - 20, boxRect.height), gameObject.name, labelStyle);
 
-				Texture2D[] icons;
-				if (objectToComponentIcons.TryGetValue(gameObject, out icons))
+				Texture2D[] iconsLocal = icons[i];
+				if (iconsLocal.Length > 0)
 				{
-					int maxLength = icons.Length;
-					bool overMaxLength = icons.Length > maxIcons;
-					if (overMaxLength)
-						maxLength = maxIcons;
-					for (var j = 0; j < maxLength; j++)
+					int maxLength = Mathf.Min(iconsLocal.Length, maxIcons);
+					float width = NSelection.height * maxLength;
+					Rect iconsRect = new Rect(boxRect.x + boxRect.width - maxLength * NSelection.height, boxRect.y, width, NSelection.height);
+					float iconOffset = 0;
+
+					//Behaviour for scrolling icons when the cursor is over the selection (only if the icon count is greater than maxIcons)
+					if (contains && maxLength < iconsLocal.Length)
 					{
-						Texture2D icon = icons[j];
-						if (overMaxLength && j >= maxLength - 1)
+						float max = iconsLocal.Length - maxLength;
+						iconsOffsets[i] = Mathf.MoveTowards(iconsOffsets[i], iconsOffsetTargets[i], Time.deltaTime * 0.01f);
+						if (iconsOffsets[i] <= 0)
 						{
-							GUI.Label(new Rect(boxRect.x + boxRect.width - (maxLength - j) * NSelection.height, boxRect.y, NSelection.height, NSelection.height), shurikenPlus);
+							iconsOffsets[i] = 0;
+							iconsOffsetTargets[i] = max;
 						}
-						else
+						else if (iconsOffsets[i] >= max)
 						{
-							GUI.Label(new Rect(boxRect.x + boxRect.width - (maxLength - j) * NSelection.height, boxRect.y, NSelection.height, NSelection.height), icon);
+							iconsOffsets[i] = max;
+							iconsOffsetTargets[i] = 0;
+						}
+
+						iconOffset = iconsOffsets[i];
+					}
+					else
+						iconsOffsets[i] = iconOffset;
+
+					using (new GUI.GroupScope(iconsRect))
+					{
+						for (var j = 0; j < iconsLocal.Length; j++)
+						{
+							Texture2D icon = iconsLocal[j];
+							GUI.Label(new Rect(width - (maxLength - j) * NSelection.height - iconOffset * NSelection.height, 0, NSelection.height, NSelection.height), icon);
 						}
 					}
 				}
@@ -323,14 +339,17 @@ namespace Vertx
 
 			if (e.type != EventType.Repaint && e.type != EventType.Layout)
 				e.Use();
-			
+
 			Focus();
-		
+
 			Repaint();
 		}
 
 		void EndSelection()
 		{
+			//Fix issues where the FPS controls are stuck on
+			Tools.viewTool = ViewTool.None;
+
 			scrollPosition = 0;
 			totalSelection = null;
 			currentSelectionHash.Clear();
