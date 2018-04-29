@@ -186,6 +186,7 @@ namespace Vertx
 
 		private void CaptureEvents(SceneView sceneView)
 		{
+			GUIUtility.hotControl = 0;
 			Event e = Event.current;
 			if (e.type != EventType.Repaint && e.type != EventType.Layout)
 			{
@@ -200,9 +201,11 @@ namespace Vertx
 
 		private void OnDisable()
 		{
-			SceneView.onSceneGUIDelegate -= CaptureEvents;
-			Object[] objects = Selection.objects;
-			EditorApplication.delayCall += () => { Selection.objects = objects; };
+			//Locks the scene view from recieving input for one more frame - which is enough to stop clicking off the UI from selecting a new object
+			EditorApplication.delayCall += ()=>
+			{
+				SceneView.onSceneGUIDelegate -= CaptureEvents;
+			};
 		}
 
 		private int scrollDelta;
