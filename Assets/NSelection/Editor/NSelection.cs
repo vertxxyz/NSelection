@@ -33,7 +33,6 @@ namespace Vertx
 		private static bool isShiftSelection;
 		private static Vector2 selectionPosition;
 		private static float xOffset;
-		private static int scrollTarget;
 		private static float scrollPosition;
 
 		//Mini white label is used for highlighted content
@@ -80,19 +79,10 @@ namespace Vertx
 					//Scrolling behaviour
 					if (e.type == EventType.ScrollWheel)
 					{
-						scrollTarget += Math.Sign(e.delta.y);
-						scrollTarget = Mathf.Clamp(scrollTarget, 0, totalSelection.Length-1);
+						scrollPosition += Math.Sign(e.delta.y);
+						scrollPosition = Mathf.Clamp(scrollPosition, 0, totalSelection.Length-1);
 						e.Use();
 					}
-
-					// ReSharper disable once CompareOfFloatsByEqualityOperator
-					if (scrollPosition != scrollTarget)
-					{
-						scrollPosition = Mathf.Lerp(scrollPosition, scrollTarget, Time.deltaTime * 10);
-						if (Math.Abs(scrollPosition - scrollTarget) < 0.001f)
-							scrollPosition = scrollTarget;
-					}
-					//------------
 					
 					Rect seperatorTopRect = new Rect(selectionPosition.x + xOffset, selectionPosition.y - scrollPosition * height - height / 2f - 1, width, 1);
 					EditorGUI.DrawRect(seperatorTopRect, boxBorderColor);
@@ -223,8 +213,7 @@ namespace Vertx
 					else
 						xOffset = 0;
 					int value = Mathf.CeilToInt(((selectionPosition.y + height * totalSelection.Length) - sceneView.position.height + 10)/height);
-					scrollTarget = Mathf.Max(0, value);
-					scrollPosition = scrollTarget;
+					scrollPosition = Mathf.Max(0, value);
 					//------------------
 					
 					e.Use();
@@ -234,7 +223,6 @@ namespace Vertx
 
 		static void EndSelection()
 		{
-			scrollTarget = 0;
 			scrollPosition = 0;
 			totalSelection = null;
 			currentSelectionHash.Clear();
