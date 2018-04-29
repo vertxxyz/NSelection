@@ -26,8 +26,6 @@ namespace Vertx
 
 		static bool mouseRightIsDownWithoutDrag;
 
-		private static readonly int id = "NSelection".GetHashCode();
-
 		public const float width = 250f;
 		public const float height = 16f;
 
@@ -80,7 +78,7 @@ namespace Vertx
 					SelectionPopup popup = SelectionPopup.ShowModal(
 						new Rect(
 							sceneView.position.x + e.mousePosition.x + xOffset,
-							sceneView.position.y + e.mousePosition.y - height / 2f,
+							sceneView.position.y + e.mousePosition.y + height / 2f,
 							width,
 							height * SelectionPopup.totalSelection.Length + 1
 							)
@@ -138,6 +136,7 @@ namespace Vertx
 //		private static Vector2 selectionPosition;
 		private static float xOffset;
 		public static float scrollPosition;
+		private static Vector2 originalPosition;
 		private const int maxIcons = 7;
 
 		private static Color boxBorderColor
@@ -172,42 +171,63 @@ namespace Vertx
 			if (totalSelection == null || totalSelection.Length == 0)
 				return null;
 			SelectionPopup popup = CreateInstance<SelectionPopup>();
-			popup.ShowAsDropDown(r, r.size);
+			popup.ShowAsDropDown(new Rect(r.position, Vector2.zero), r.size);
+			popup.Focus();
+			originalPosition = r.position;
 			return popup;
 		}
-
 
 		private void OnEnable()
 		{
 			SceneView.onSceneGUIDelegate += CaptureEvents;
+		}
+
+		private void CaptureEvents(SceneView sceneView)
+		{
+			Event e = Event.current;
+			if (e.type != EventType.Repaint && e.type != EventType.Layout)
+			{
+				if (e.type == EventType.ScrollWheel)
+					scrollDelta = Math.Sign(e.delta.y);
 				
+				if(e.type == EventType.MouseDown || e.type == EventType.MouseUp)
+					Debug.Log("Hey");
+				e.Use();
+			}
 		}
 
 		private void OnDisable()
 		{
 			SceneView.onSceneGUIDelegate -= CaptureEvents;
+			Object[] objects = Selection.objects;
+			EditorApplication.delayCall += () =>
+			{
+				Debug.Log(Selection.objects.Length);
+				Selection.objects = objects;
+			};
 		}
 
-		void CaptureEvents(SceneView sceneView)
-		{
-			Event e = Event.current;
-			if (e.type == EventType.KeyDown || e.type == EventType.KeyUp)
-				e.Use();
-		}
-
+		private int scrollDelta;
+		
 		void OnGUI()
 		{
 			Event e = Event.current;
+			GUIUtility.hotControl = 0;
 
-			//EditorGUIUtility.AddCursorRect(new Rect(0f, 17f, Screen.width, Screen.height - 17f), isShiftSelection || e.shift ? MouseCursor.ArrowPlus : MouseCursor.Arrow);
 			int indexCurrentlyHighlighted = -1;
 
 			//Scrolling behaviour
 			if (e.type == EventType.ScrollWheel)
+				scrollDelta = Math.Sign(e.delta.y);
+			
+			if (scrollDelta != 0)
 			{
-				scrollPosition += Math.Sign(e.delta.y);
+				scrollPosition += scrollDelta;
 				scrollPosition = Mathf.Clamp(scrollPosition, 0, totalSelection.Length - 1);
-				e.Use();
+				Rect tempRect = position;
+				tempRect.position = new Vector2(originalPosition.x, originalPosition.y - scrollPosition * NSelection.height);
+				ShowAsDropDown(new Rect(tempRect.position, Vector2.zero), tempRect.size);
+				scrollDelta = 0;
 			}
 
 			Rect seperatorTopRect = new Rect(0, 0, NSelection.width, 1);
@@ -217,7 +237,7 @@ namespace Vertx
 			{
 				GameObject gameObject = totalSelection[i];
 
-				Rect boxRect = new Rect(0, i * NSelection.height, NSelection.width, NSelection.height);
+				Rect boxRect = new Rect(0, 1 + i * NSelection.height, NSelection.width, NSelection.height);
 				GUIStyle labelStyle;
 
 				bool isInSelection = currentSelectionHash.Contains(gameObject);
@@ -285,7 +305,6 @@ namespace Vertx
 				}
 			}
 
-
 			if (e.isKey && e.type == EventType.KeyUp)
 			{
 				switch (e.keyCode)
@@ -305,6 +324,8 @@ namespace Vertx
 			if (e.type != EventType.Repaint && e.type != EventType.Layout)
 				e.Use();
 			
+			Focus();
+		
 			Repaint();
 		}
 
@@ -313,7 +334,6 @@ namespace Vertx
 			scrollPosition = 0;
 			totalSelection = null;
 			currentSelectionHash.Clear();
-			GUIUtility.hotControl = 0;
 			SceneView.RepaintAll();
 			Close();
 		}
