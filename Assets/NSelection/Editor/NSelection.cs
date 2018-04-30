@@ -167,6 +167,24 @@ namespace Vertx
 				});
 			}
 		}
+		
+		//We can't just use EditorStyles.miniLabel because it's not black in the pro-skin
+		private static GUIStyle _miniLabelBlack;
+		private static GUIStyle miniLabelBlack
+		{
+			get
+			{
+				return _miniLabelBlack ?? (_miniLabelBlack = new GUIStyle(EditorStyles.miniLabel)
+				{
+					normal = {textColor = Color.black},
+					onNormal = {textColor = Color.black},
+					hover = {textColor = Color.black},
+					onHover = {textColor = Color.black},
+					active = {textColor = Color.black},
+					onActive = {textColor = Color.black},
+				});
+			}
+		}
 
 		public static SelectionPopup ShowModal(Rect r)
 		{
@@ -266,7 +284,7 @@ namespace Vertx
 					else //Not In Selection
 					{
 						GUI.color = Color.white;
-						labelStyle = EditorStyles.miniLabel;
+						labelStyle = miniLabelBlack;
 					}
 				}
 
