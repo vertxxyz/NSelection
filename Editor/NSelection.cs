@@ -13,15 +13,17 @@ namespace Vertx
 	[InitializeOnLoad]
 	public class NSelection
 	{
-		static NSelection()
-		{
-			RefreshListeners();
-		}
+		static NSelection() => RefreshListeners();
 
 		static void RefreshListeners()
 		{
+			#if UNITY_2019_1_OR_NEWER
+			SceneView.duringSceneGui -= OnSceneGUI;
+			SceneView.duringSceneGui += OnSceneGUI;
+			#else
 			SceneView.onSceneGUIDelegate -= OnSceneGUI;
 			SceneView.onSceneGUIDelegate += OnSceneGUI;
+			#endif
 		}
 
 		static bool mouseRightIsDownWithoutDrag;
@@ -111,19 +113,13 @@ namespace Vertx
 			return (IEnumerable<GameObject>) getAllOverlapping.Invoke(null, new object[] {position});
 		}
 
-		[SerializeField] static MethodInfo _getAllOverlapping;
+		static MethodInfo _getAllOverlapping;
 
-		static MethodInfo getAllOverlapping
-		{
-			get { return _getAllOverlapping ?? (_getAllOverlapping = sceneViewPickingClass.GetMethod("GetAllOverlapping", BindingFlags.Static | BindingFlags.NonPublic)); }
-		}
+		static MethodInfo getAllOverlapping => _getAllOverlapping ?? (_getAllOverlapping = sceneViewPickingClass.GetMethod("GetAllOverlapping", BindingFlags.Static | BindingFlags.NonPublic));
 
-		[SerializeField] static Type _sceneViewPickingClass;
+		static Type _sceneViewPickingClass;
 
-		static Type sceneViewPickingClass
-		{
-			get { return _sceneViewPickingClass ?? (_sceneViewPickingClass = Type.GetType("UnityEditor.SceneViewPicking,UnityEditor")); }
-		}
+		static Type sceneViewPickingClass => _sceneViewPickingClass ?? (_sceneViewPickingClass = Type.GetType("UnityEditor.SceneViewPicking,UnityEditor"));
 
 		#endregion
 	}
@@ -144,47 +140,34 @@ namespace Vertx
 		private static Vector2 originalPosition;
 		private const int maxIcons = 7;
 
-		private static Color boxBorderColor
-		{
-			get { return new Color(0, 0, 0, 1); }
-		}
+		private static Color boxBorderColor => new Color(0, 0, 0, 1);
 
 		//Mini white label is used for highlighted content
 		private static GUIStyle _miniLabelWhite;
 
-		private static GUIStyle miniLabelWhite
-		{
-			get
+		private static GUIStyle miniLabelWhite =>
+			_miniLabelWhite ?? (_miniLabelWhite = new GUIStyle(EditorStyles.miniLabel)
 			{
-				return _miniLabelWhite ?? (_miniLabelWhite = new GUIStyle(EditorStyles.miniLabel)
-				{
-					normal = {textColor = Color.white},
-					onNormal = {textColor = Color.white},
-					hover = {textColor = Color.white},
-					onHover = {textColor = Color.white},
-					active = {textColor = Color.white},
-					onActive = {textColor = Color.white},
-				});
-			}
-		}
-		
+				normal = {textColor = Color.white},
+				onNormal = {textColor = Color.white},
+				hover = {textColor = Color.white},
+				onHover = {textColor = Color.white},
+				active = {textColor = Color.white},
+				onActive = {textColor = Color.white},
+			});
+
 		//We can't just use EditorStyles.miniLabel because it's not black in the pro-skin
 		private static GUIStyle _miniLabelBlack;
-		private static GUIStyle miniLabelBlack
-		{
-			get
+		private static GUIStyle miniLabelBlack =>
+			_miniLabelBlack ?? (_miniLabelBlack = new GUIStyle(EditorStyles.miniLabel)
 			{
-				return _miniLabelBlack ?? (_miniLabelBlack = new GUIStyle(EditorStyles.miniLabel)
-				{
-					normal = {textColor = Color.black},
-					onNormal = {textColor = Color.black},
-					hover = {textColor = Color.black},
-					onHover = {textColor = Color.black},
-					active = {textColor = Color.black},
-					onActive = {textColor = Color.black},
-				});
-			}
-		}
+				normal = {textColor = Color.black},
+				onNormal = {textColor = Color.black},
+				hover = {textColor = Color.black},
+				onHover = {textColor = Color.black},
+				active = {textColor = Color.black},
+				onActive = {textColor = Color.black},
+			});
 
 		public static SelectionPopup ShowModal(Rect r)
 		{
@@ -199,30 +182,39 @@ namespace Vertx
 
 		private void OnEnable()
 		{
+			#if UNITY_2019_1_OR_NEWER
+			SceneView.duringSceneGui += CaptureEvents;
+			#else
 			SceneView.onSceneGUIDelegate += CaptureEvents;
+			#endif
 		}
 
 		private void CaptureEvents(SceneView sceneView)
 		{
 			GUIUtility.hotControl = 0;
 			Event e = Event.current;
-			if (e.type != EventType.Repaint && e.type != EventType.Layout)
-			{
-				if (e.type == EventType.ScrollWheel)
-				{
+			switch (e.type) {
+				case EventType.Repaint:
+				case EventType.Layout:
+					return;
+				case EventType.ScrollWheel:
 					scrollDelta = Math.Sign(e.delta.y);
-				}
-
-				e.Use();
+					break;
 			}
+			e.Use();
 		}
 
 		private void OnDisable()
 		{
-			//Locks the scene view from recieving input for one more frame - which is enough to stop clicking off the UI from selecting a new object
-			EditorApplication.delayCall += ()=>
+			//Locks the scene view from receiving input for one more frame - which is enough to stop clicking off the UI from selecting a new object
+			EditorApplication.delayCall += () =>
 			{
+				
+				#if UNITY_2019_1_OR_NEWER
+				SceneView.duringSceneGui -= CaptureEvents;
+				#else
 				SceneView.onSceneGUIDelegate -= CaptureEvents;
+				#endif
 			};
 		}
 
@@ -249,8 +241,8 @@ namespace Vertx
 				scrollDelta = 0;
 			}
 
-			Rect seperatorTopRect = new Rect(0, 0, NSelection.width, 1);
-			EditorGUI.DrawRect(seperatorTopRect, boxBorderColor);
+			Rect separatorTopRect = new Rect(0, 0, NSelection.width, 1);
+			EditorGUI.DrawRect(separatorTopRect, boxBorderColor);
 
 			for (var i = 0; i < totalSelection.Length; i++)
 			{
@@ -305,7 +297,7 @@ namespace Vertx
 					if (contains && maxLength < iconsLocal.Length)
 					{
 						float max = iconsLocal.Length - maxLength;
-						iconsOffsets[i] = Mathf.MoveTowards(iconsOffsets[i], iconsOffsetTargets[i], (float)(EditorApplication.timeSinceStartup-lastTime));
+						iconsOffsets[i] = Mathf.MoveTowards(iconsOffsets[i], iconsOffsetTargets[i], (float) (EditorApplication.timeSinceStartup - lastTime));
 						if (iconsOffsets[i] <= 0)
 						{
 							iconsOffsets[i] = 0;
@@ -364,7 +356,7 @@ namespace Vertx
 			Focus();
 
 			Repaint();
-			
+
 			lastTime = EditorApplication.timeSinceStartup;
 		}
 

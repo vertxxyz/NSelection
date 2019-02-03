@@ -1,0 +1,11 @@
+{
+  "name": "com.vertx.nselection",
+  "displayName":  "nSelection",
+  "version": "1.0.0",
+  "unity": "2018.3",
+  "description": "Simple selection for busy scenes.",
+  "keywords": [ "Editor" ],
+  "category": "Tools",
+  "dependencies": {
+  }
+}
