@@ -50,7 +50,6 @@ namespace Vertx
 				//The actual CTRL+RIGHT-MOUSE functionality
 				if (mouseRightIsDownWithoutDrag && e.rawType == EventType.MouseUp)
 				{
-					SelectionPopup.isShiftSelection = e.shift;
 					SelectionPopup.totalSelection = GetAllOverlapping(e.mousePosition).ToArray();
 
 					SelectionPopup.icons = new Texture2D[SelectionPopup.totalSelection.Length][];
@@ -85,7 +84,7 @@ namespace Vertx
 					SelectionPopup popup = SelectionPopup.ShowModal(
 						new Rect(
 							sceneView.position.x + e.mousePosition.x + xOffset,
-							sceneView.position.y + e.mousePosition.y + height / 2f,
+							sceneView.position.y + e.mousePosition.y + height * 1.5f,
 							width,
 							height * SelectionPopup.totalSelection.Length + 1
 						)
@@ -99,7 +98,7 @@ namespace Vertx
 
 					e.alt = false;
 					mouseRightIsDownWithoutDrag = false;
-					SelectionPopup.RefreshSelectionHash();
+					SelectionPopup.RefreshSelection();
 
 					e.Use();
 				}
@@ -108,10 +107,7 @@ namespace Vertx
 
 		#region Overlapping
 
-		static IEnumerable<GameObject> GetAllOverlapping(Vector2 position)
-		{
-			return (IEnumerable<GameObject>) getAllOverlapping.Invoke(null, new object[] {position});
-		}
+		static IEnumerable<GameObject> GetAllOverlapping(Vector2 position) => (IEnumerable<GameObject>) getAllOverlapping.Invoke(null, new object[] {position});
 
 		static MethodInfo _getAllOverlapping;
 
@@ -126,19 +122,16 @@ namespace Vertx
 
 	public class SelectionPopup : EditorWindow
 	{
-		public static GameObject[] totalSelection;
-
-		private static readonly HashSet<GameObject> currentSelectionHash = new HashSet<GameObject>();
 		public static Texture2D[][] icons;
 		public static float[] iconsOffsets;
 		public static float[] iconsOffsetTargets;
-
-		public static bool isShiftSelection;
 
 		private static float xOffset;
 		public static float scrollPosition;
 		private static Vector2 originalPosition;
 		private const int maxIcons = 7;
+
+		#region Styling
 
 		private static Color boxBorderColor => new Color(0, 0, 0, 1);
 
@@ -158,6 +151,7 @@ namespace Vertx
 
 		//We can't just use EditorStyles.miniLabel because it's not black in the pro-skin
 		private static GUIStyle _miniLabelBlack;
+
 		private static GUIStyle miniLabelBlack =>
 			_miniLabelBlack ?? (_miniLabelBlack = new GUIStyle(EditorStyles.miniLabel)
 			{
@@ -168,6 +162,8 @@ namespace Vertx
 				active = {textColor = Color.black},
 				onActive = {textColor = Color.black},
 			});
+		
+		#endregion
 
 		public static SelectionPopup ShowModal(Rect r)
 		{
@@ -175,8 +171,8 @@ namespace Vertx
 				return null;
 			SelectionPopup popup = CreateInstance<SelectionPopup>();
 			popup.ShowAsDropDown(new Rect(r.position, Vector2.zero), r.size);
-			popup.Focus();
 			originalPosition = r.position;
+			lastIndexHighlighted = -1;
 			return popup;
 		}
 
@@ -193,7 +189,8 @@ namespace Vertx
 		{
 			GUIUtility.hotControl = 0;
 			Event e = Event.current;
-			switch (e.type) {
+			switch (e.type)
+			{
 				case EventType.Repaint:
 				case EventType.Layout:
 					return;
@@ -201,6 +198,7 @@ namespace Vertx
 					scrollDelta = Math.Sign(e.delta.y);
 					break;
 			}
+
 			e.Use();
 		}
 
@@ -209,7 +207,6 @@ namespace Vertx
 			//Locks the scene view from receiving input for one more frame - which is enough to stop clicking off the UI from selecting a new object
 			EditorApplication.delayCall += () =>
 			{
-				
 				#if UNITY_2019_1_OR_NEWER
 				SceneView.duringSceneGui -= CaptureEvents;
 				#else
@@ -219,7 +216,13 @@ namespace Vertx
 		}
 
 		private int scrollDelta;
+		
+		public static GameObject[] totalSelection;
 
+		private static readonly HashSet<GameObject> currentSelection = new HashSet<GameObject>();
+		private static int lastIndexHighlighted = -1;
+		private static bool shiftWasHeldForPreview;
+		
 		void OnGUI()
 		{
 			Event e = Event.current;
@@ -240,7 +243,7 @@ namespace Vertx
 				ShowAsDropDown(new Rect(tempRect.position, Vector2.zero), tempRect.size);
 				scrollDelta = 0;
 			}
-
+			
 			Rect separatorTopRect = new Rect(0, 0, NSelection.width, 1);
 			EditorGUI.DrawRect(separatorTopRect, boxBorderColor);
 
@@ -251,7 +254,7 @@ namespace Vertx
 				Rect boxRect = new Rect(0, 1 + i * NSelection.height, NSelection.width, NSelection.height);
 				GUIStyle labelStyle;
 
-				bool isInSelection = currentSelectionHash.Contains(gameObject);
+				bool isInSelection = currentSelection.Contains(gameObject);
 				bool contains = boxRect.Contains(e.mousePosition);
 				if (contains)
 					indexCurrentlyHighlighted = i;
@@ -324,6 +327,46 @@ namespace Vertx
 					}
 				}
 
+				//If the selection is being hovered we may need to modify the currently previewing selection
+				//or if the shift key has changes states.
+				if (contains && (i != lastIndexHighlighted || shiftWasHeldForPreview != e.shift))
+				{
+					lastIndexHighlighted = i;
+					if (!e.shift)
+					{
+						shiftWasHeldForPreview = false;
+						//If we're not selecting more (ie. have shift held) we should just set the selection to be the hovered item
+						Selection.objects = new Object[]{gameObject};
+					}
+					else
+					{
+						shiftWasHeldForPreview = true;
+						//Otherwise we need to alter the current selection to add or remove the currently hovered selection
+						if (isInSelection)
+						{
+							//Remove the GameObject
+							Object[] newSelection = new Object[currentSelection.Count-1];
+							int n = 0;
+							foreach (GameObject o in currentSelection)
+							{
+								if (o == gameObject) continue;
+								newSelection[n++] = o;
+							}
+							Selection.objects = newSelection;
+						}
+						else
+						{
+							//Add the GameObject
+							Object[] newSelection = new Object[currentSelection.Count+1];
+							int n = 0;
+							foreach (GameObject o in currentSelection)
+								newSelection[n++] = o;
+							newSelection[n] = gameObject;
+							Selection.objects = newSelection;
+						}
+					}
+				}
+				
 				//Clicked in the box!
 				if (contains && e.isMouse && e.type == EventType.MouseUp)
 				{
@@ -334,11 +377,18 @@ namespace Vertx
 				}
 			}
 
+			if (indexCurrentlyHighlighted == -1 && lastIndexHighlighted != -1)
+			{
+				lastIndexHighlighted = -1;
+				RevertPreviewSelection();
+			}
+
 			if (e.isKey && e.type == EventType.KeyUp)
 			{
 				switch (e.keyCode)
 				{
 					case KeyCode.Escape:
+						RevertPreviewSelection();
 						EndSelection();
 						break;
 					case KeyCode.Return:
@@ -348,7 +398,11 @@ namespace Vertx
 				}
 			}
 			else if (e.isMouse && e.type == EventType.MouseUp)
+			{
+				if(indexCurrentlyHighlighted == -1)
+					RevertPreviewSelection();
 				EndSelection();
+			}
 
 			if (e.type != EventType.Repaint && e.type != EventType.Layout)
 				e.Use();
@@ -369,23 +423,32 @@ namespace Vertx
 
 			scrollPosition = 0;
 			totalSelection = null;
-			currentSelectionHash.Clear();
+			currentSelection.Clear();
 			SceneView.RepaintAll();
 			Close();
 		}
-
-		public static void RefreshSelectionHash()
+		
+		void RevertPreviewSelection()
 		{
-			currentSelectionHash.Clear();
-			currentSelectionHash.UnionWith(Selection.gameObjects);
+			Object[] newSelection = new Object[currentSelection.Count];
+			int n = 0;
+			foreach (GameObject g in currentSelection)
+				newSelection[n++] = g;
+			Selection.objects = newSelection;
+		}
+
+		public static void RefreshSelection()
+		{
+			currentSelection.Clear();
+			currentSelection.UnionWith(Selection.gameObjects);
 		}
 
 		void MakeSelection(int index, bool isShift)
 		{
 			GameObject gameObject = totalSelection[index];
-			bool selectionContains = currentSelectionHash.Contains(gameObject);
+			bool selectionContains = currentSelection.Contains(gameObject);
 
-			if (isShiftSelection || isShift)
+			if (isShift)
 			{
 				HashSet<Object> objects = new HashSet<Object>(Selection.objects);
 				if (!selectionContains)
@@ -393,9 +456,7 @@ namespace Vertx
 				else
 					objects.Remove(gameObject);
 
-
 				Selection.objects = objects.ToArray();
-				isShiftSelection = true;
 			}
 			else
 				Selection.activeGameObject = !selectionContains ? gameObject : null;
@@ -403,7 +464,7 @@ namespace Vertx
 			if (!isShift)
 				EndSelection();
 			else
-				RefreshSelectionHash();
+				RefreshSelection();
 			SceneView.RepaintAll();
 		}
 	}
