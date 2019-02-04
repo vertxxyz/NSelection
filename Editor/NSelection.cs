@@ -162,7 +162,7 @@ namespace Vertx
 				active = {textColor = Color.black},
 				onActive = {textColor = Color.black},
 			});
-		
+
 		#endregion
 
 		public static SelectionPopup ShowModal(Rect r)
@@ -172,7 +172,6 @@ namespace Vertx
 			SelectionPopup popup = CreateInstance<SelectionPopup>();
 			popup.ShowAsDropDown(new Rect(r.position, Vector2.zero), r.size);
 			originalPosition = r.position;
-			lastIndexHighlighted = -1;
 			return popup;
 		}
 
@@ -216,13 +215,13 @@ namespace Vertx
 		}
 
 		private int scrollDelta;
-		
+
 		public static GameObject[] totalSelection;
 
 		private static readonly HashSet<GameObject> currentSelection = new HashSet<GameObject>();
-		private static int lastIndexHighlighted = -1;
-		private static bool shiftWasHeldForPreview;
-		
+		private int lastIndexHighlighted = -1;
+		private bool shiftWasHeldForPreview;
+
 		void OnGUI()
 		{
 			Event e = Event.current;
@@ -243,7 +242,7 @@ namespace Vertx
 				ShowAsDropDown(new Rect(tempRect.position, Vector2.zero), tempRect.size);
 				scrollDelta = 0;
 			}
-			
+
 			Rect separatorTopRect = new Rect(0, 0, NSelection.width, 1);
 			EditorGUI.DrawRect(separatorTopRect, boxBorderColor);
 
@@ -263,10 +262,23 @@ namespace Vertx
 
 				if (isInSelection)
 				{
-					if (contains) //Going to Deselect
-						GUI.color = new Color(0.58f, 0.62f, 0.75f);
-					else //Is In Selection
-						GUI.color = new Color(0f, 0.5f, 1f);
+					if (contains)
+					{
+						//If we're not holding shift it will solely select this object
+						if(!e.shift)
+							GUI.color = new Color(0f, 0.5f, 1f);
+						else	//Otherwise it will be a deselection
+							GUI.color = new Color(0.58f, 0.62f, 0.75f);
+					}
+					else
+					{
+						//If we're not holding shift and we're not hovering it will deselect these, so show that preview.
+						if(!e.shift)
+							GUI.color = new Color(0.58f, 0.62f, 0.75f);
+						else	// Otherwise, we will be selecting additionally
+							GUI.color = new Color(0f, 0.5f, 1f);
+					}
+
 					labelStyle = miniLabelWhite;
 				}
 				else
@@ -336,7 +348,7 @@ namespace Vertx
 					{
 						shiftWasHeldForPreview = false;
 						//If we're not selecting more (ie. have shift held) we should just set the selection to be the hovered item
-						Selection.objects = new Object[]{gameObject};
+						Selection.objects = new Object[] {gameObject};
 					}
 					else
 					{
@@ -345,19 +357,20 @@ namespace Vertx
 						if (isInSelection)
 						{
 							//Remove the GameObject
-							Object[] newSelection = new Object[currentSelection.Count-1];
+							Object[] newSelection = new Object[currentSelection.Count - 1];
 							int n = 0;
 							foreach (GameObject o in currentSelection)
 							{
 								if (o == gameObject) continue;
 								newSelection[n++] = o;
 							}
+
 							Selection.objects = newSelection;
 						}
 						else
 						{
 							//Add the GameObject
-							Object[] newSelection = new Object[currentSelection.Count+1];
+							Object[] newSelection = new Object[currentSelection.Count + 1];
 							int n = 0;
 							foreach (GameObject o in currentSelection)
 								newSelection[n++] = o;
@@ -366,7 +379,7 @@ namespace Vertx
 						}
 					}
 				}
-				
+
 				//Clicked in the box!
 				if (contains && e.isMouse && e.type == EventType.MouseUp)
 				{
@@ -399,7 +412,7 @@ namespace Vertx
 			}
 			else if (e.isMouse && e.type == EventType.MouseUp)
 			{
-				if(indexCurrentlyHighlighted == -1)
+				if (indexCurrentlyHighlighted == -1)
 					RevertPreviewSelection();
 				EndSelection();
 			}
@@ -427,7 +440,10 @@ namespace Vertx
 			SceneView.RepaintAll();
 			Close();
 		}
-		
+
+		/// <summary>
+		/// Reverts the currently active selection preview. The selection is visualised before selection, and this method removes the visualisation.
+		/// </summary>
 		void RevertPreviewSelection()
 		{
 			Object[] newSelection = new Object[currentSelection.Count];
