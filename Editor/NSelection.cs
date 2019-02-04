@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
+using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -265,17 +266,17 @@ namespace Vertx
 					if (contains)
 					{
 						//If we're not holding shift it will solely select this object
-						if(!e.shift)
+						if (!e.shift)
 							GUI.color = new Color(0f, 0.5f, 1f);
-						else	//Otherwise it will be a deselection
+						else //Otherwise it will be a deselection
 							GUI.color = new Color(0.58f, 0.62f, 0.75f);
 					}
 					else
 					{
 						//If we're not holding shift and we're not hovering it will deselect these, so show that preview.
-						if(!e.shift)
+						if (!e.shift)
 							GUI.color = new Color(0.58f, 0.62f, 0.75f);
-						else	// Otherwise, we will be selecting additionally
+						else // Otherwise, we will be selecting additionally
 							GUI.color = new Color(0f, 0.5f, 1f);
 					}
 
@@ -343,6 +344,7 @@ namespace Vertx
 				//or if the shift key has changes states.
 				if (contains && (i != lastIndexHighlighted || shiftWasHeldForPreview != e.shift))
 				{
+					ResetHierarchyToExpandedState();
 					lastIndexHighlighted = i;
 					if (!e.shift)
 					{
@@ -444,6 +446,7 @@ namespace Vertx
 		/// </summary>
 		void RevertPreviewSelection()
 		{
+			ResetHierarchyToExpandedState();
 			lastIndexHighlighted = -1;
 			//Revert to currentSelection
 			Object[] newSelection = new Object[currentSelection.Count];
@@ -455,6 +458,7 @@ namespace Vertx
 
 		public static void RefreshSelection()
 		{
+			SetHierarchyExpandedState();
 			currentSelection.Clear();
 			currentSelection.UnionWith(Selection.gameObjects);
 		}
@@ -486,5 +490,54 @@ namespace Vertx
 				RefreshSelection();
 			SceneView.RepaintAll();
 		}
+
+		#region Hierarchy Window Manipulation
+
+		private static Type _sceneHierarchyType;
+		private static Type sceneHierarchyType => _sceneHierarchyType ?? (_sceneHierarchyType = Type.GetType("UnityEditor.SceneHierarchy,UnityEditor"));
+		private static Type _sceneHierarchyWindowType;
+		private static Type sceneHierarchyWindowType => _sceneHierarchyWindowType ?? (_sceneHierarchyWindowType = Type.GetType("UnityEditor.SceneHierarchyWindow,UnityEditor"));
+		private static Type _treeViewController;
+		private static Type treeViewController => _treeViewController ?? (_treeViewController = Type.GetType("UnityEditor.IMGUI.Controls.TreeViewController,UnityEditor"));
+		private static EditorWindow _hierarchyWindow;
+		private static EditorWindow hierarchyWindow => _hierarchyWindow == null ? _hierarchyWindow = GetHierarchyWindow() : _hierarchyWindow;
+
+		private static int[] allExpandedIDs;
+
+		private static void SetHierarchyExpandedState()
+		{
+			allExpandedIDs = GetAllVisible();
+			
+			int[] GetAllVisible()
+			{
+				if (hierarchyWindow == null)
+					return null;
+				MethodInfo GetExpandedGameObjectsMI = sceneHierarchyWindowType.GetMethod("GetExpandedIDs", BindingFlags.NonPublic | BindingFlags.Instance);
+				return (int[]) GetExpandedGameObjectsMI.Invoke(hierarchyWindow, null);
+			}
+		}
+
+		private static void ResetHierarchyToExpandedState()
+		{
+			if (allExpandedIDs == null)
+				return;
+			if (hierarchyWindow == null)
+				return;
+			object sceneHierarchy = sceneHierarchyWindowType.GetField("m_SceneHierarchy", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(hierarchyWindow);
+			TreeViewState treeViewState = (TreeViewState) sceneHierarchyType.GetProperty("treeViewState", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(sceneHierarchy);
+			treeViewState.expandedIDs = new List<int>(allExpandedIDs);
+			//Reload the state data because otherwise the tree view does not actually collapse.
+			MethodInfo reloadDataMI = treeViewController.GetMethod("ReloadData");
+			reloadDataMI.Invoke(sceneHierarchyType.GetProperty("treeView", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(sceneHierarchy), null);
+		}
+
+		private static EditorWindow GetHierarchyWindow()
+		{
+			Object[] findObjectsOfTypeAll = Resources.FindObjectsOfTypeAll(sceneHierarchyWindowType);
+			if (findObjectsOfTypeAll.Length > 0)
+				return (EditorWindow) findObjectsOfTypeAll[0];
+			return null;
+		}
+		#endregion
 	}
 }
