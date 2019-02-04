@@ -52,18 +52,18 @@ namespace Vertx
 				{
 					SelectionPopup.totalSelection = GetAllOverlapping(e.mousePosition).ToArray();
 
-					SelectionPopup.icons = new Texture2D[SelectionPopup.totalSelection.Length][];
+					SelectionPopup.icons = new GUIContent[SelectionPopup.totalSelection.Length][];
 					SelectionPopup.iconsOffsets = new float[SelectionPopup.totalSelection.Length];
 					SelectionPopup.iconsOffsetTargets = new float[SelectionPopup.totalSelection.Length];
 					for (var t = 0; t < SelectionPopup.totalSelection.Length; t++)
 					{
 						GameObject gO = SelectionPopup.totalSelection[t];
 						Component[] cS = gO.GetComponents<Component>();
-						Texture2D[] icons = new Texture2D[cS.Length - 1];
+						GUIContent[] icons = new GUIContent[cS.Length - 1];
 						for (var i = 1; i < cS.Length; i++)
 						{
 							//Skip the Transform component because it's always the first object
-							icons[i - 1] = AssetPreview.GetMiniThumbnail(cS[i]);
+							icons[i - 1] = new GUIContent(AssetPreview.GetMiniThumbnail(cS[i]), ObjectNames.NicifyVariableName(cS[i].GetType().Name));
 						}
 
 						SelectionPopup.icons[t] = icons;
@@ -122,7 +122,7 @@ namespace Vertx
 
 	public class SelectionPopup : EditorWindow
 	{
-		public static Texture2D[][] icons;
+		public static GUIContent[][] icons;
 		public static float[] iconsOffsets;
 		public static float[] iconsOffsetTargets;
 
@@ -300,7 +300,7 @@ namespace Vertx
 				GUI.color = Color.white;
 				GUI.Label(new Rect(boxRect.x + 20, boxRect.y, NSelection.width - 20, boxRect.height), gameObject.name, labelStyle);
 
-				Texture2D[] iconsLocal = icons[i];
+				GUIContent[] iconsLocal = icons[i];
 				if (iconsLocal.Length > 0)
 				{
 					int maxLength = Mathf.Min(iconsLocal.Length, maxIcons);
@@ -333,7 +333,7 @@ namespace Vertx
 					{
 						for (var j = 0; j < iconsLocal.Length; j++)
 						{
-							Texture2D icon = iconsLocal[j];
+							GUIContent icon = iconsLocal[j];
 							GUI.Label(new Rect(width - (maxLength - j) * NSelection.height - iconOffset * NSelection.height, 0, NSelection.height, NSelection.height), icon);
 						}
 					}
