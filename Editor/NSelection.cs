@@ -127,7 +127,6 @@ namespace Vertx
 		public static float[] iconsOffsets;
 		public static float[] iconsOffsetTargets;
 
-		private static float xOffset;
 		public static float scrollPosition;
 		private static Vector2 originalPosition;
 		private const int maxIcons = 7;
