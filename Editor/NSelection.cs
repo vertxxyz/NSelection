@@ -348,7 +348,8 @@ namespace Vertx
 					{
 						shiftWasHeldForPreview = false;
 						//If we're not selecting more (ie. have shift held) we should just set the selection to be the hovered item
-						Selection.objects = new Object[] {gameObject};
+						Selection.objects = null;
+						Selection.activeGameObject = gameObject;
 					}
 					else
 					{
@@ -391,10 +392,7 @@ namespace Vertx
 			}
 
 			if (indexCurrentlyHighlighted == -1 && lastIndexHighlighted != -1)
-			{
-				lastIndexHighlighted = -1;
 				RevertPreviewSelection();
-			}
 
 			if (e.isKey && e.type == EventType.KeyUp)
 			{
@@ -446,6 +444,8 @@ namespace Vertx
 		/// </summary>
 		void RevertPreviewSelection()
 		{
+			lastIndexHighlighted = -1;
+			//Revert to currentSelection
 			Object[] newSelection = new Object[currentSelection.Count];
 			int n = 0;
 			foreach (GameObject g in currentSelection)
@@ -475,7 +475,10 @@ namespace Vertx
 				Selection.objects = objects.ToArray();
 			}
 			else
-				Selection.activeGameObject = !selectionContains ? gameObject : null;
+			{
+				Selection.objects = null;
+				Selection.activeGameObject = gameObject;
+			}
 
 			if (!isShift)
 				EndSelection();
