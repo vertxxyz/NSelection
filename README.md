@@ -1,6 +1,9 @@
 # NSelection
 Simple selection for busy scenes in Unity
 
+**2018.3+**
+Set your project's Scripting Runtime Version to .NET 4.x before use.
+
 ### Usage:
 **Ctrl + Left-Mouse** to activate.
 
