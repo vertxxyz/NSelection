@@ -355,7 +355,7 @@ namespace Vertx
 					{
 						shiftWasHeldForPreview = false;
 						//If we're not selecting more (ie. have shift held) we should just set the selection to be the hovered item
-						Selection.objects = null;
+						Selection.objects = new Object[0];
 						Selection.activeGameObject = gameObject;
 					}
 					else
@@ -485,7 +485,7 @@ namespace Vertx
 			}
 			else
 			{
-				Selection.objects = null;
+				Selection.objects = new Object[0];
 				Selection.activeGameObject = gameObject;
 			}
 
