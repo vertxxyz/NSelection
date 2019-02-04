@@ -87,7 +87,7 @@ namespace Vertx
 							sceneView.position.x + e.mousePosition.x + xOffset,
 							sceneView.position.y + e.mousePosition.y + height * 1.5f,
 							width,
-							height * SelectionPopup.totalSelection.Length + 1
+							height * SelectionPopup.totalSelection.Length + 1 + 5*2
 						)
 					);
 					if (popup == null)
@@ -244,14 +244,20 @@ namespace Vertx
 				scrollDelta = 0;
 			}
 
-			Rect separatorTopRect = new Rect(0, 0, NSelection.width, 1);
+			
+			//Top and bottom borders (to fix a weird issue where the top 5 pixels of the window do not receive mouse events)
+			EditorGUI.DrawRect(new Rect(0, 0, NSelection.width, 5), GUI.color);
+			EditorGUI.DrawRect(new Rect(0, 6 + NSelection.height * totalSelection.Length, NSelection.width, 5), GUI.color);
+			
+			
+			Rect separatorTopRect = new Rect(0, 5, NSelection.width, 1);
 			EditorGUI.DrawRect(separatorTopRect, boxBorderColor);
 
 			for (var i = 0; i < totalSelection.Length; i++)
 			{
 				GameObject gameObject = totalSelection[i];
 
-				Rect boxRect = new Rect(0, 1 + i * NSelection.height, NSelection.width, NSelection.height);
+				Rect boxRect = new Rect(0, 5 + 1 + i * NSelection.height, NSelection.width, NSelection.height);
 				GUIStyle labelStyle;
 
 				bool isInSelection = currentSelection.Contains(gameObject);
