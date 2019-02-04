@@ -2,10 +2,10 @@
 Simple selection for busy scenes in Unity
 
 ### Usage:
-**CTRL+Right-Mouse** to activate normally
+**Ctrl + Left-Mouse** to activate.
 
-**CTRL+Shift+Right-Mouse** to activate as a singular addition to the current selection
+Hold **Shift** during selection to select multiple objects.
 
-Hold **Shift** during selection to select more objects
+Press **Escape** or **click** outside the selection list to end the current selection.
 
 ![gif](http://vertx.xyz/wp-content/uploads/2017/12/nSelection2.gif)
