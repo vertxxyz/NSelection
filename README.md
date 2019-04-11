@@ -16,6 +16,6 @@ Press **Escape** or **click** outside the selection list to end the current sele
 ## Installation
 Ensure your project is on .NET 4.x by navigating to Edit>Project Settings>Player>Configuration>Scripting Runtime Version and switching to .NET 4.x Equivalent.
 
-Pull the project locally and Use the Package Manager (Window>Package Manager) and add the appropriate package.json files present in the root of each folder.
+Pull the project locally and Use the Package Manager (Window>Package Manager) and add the package.json file present in the root of the folder.
 
 Or edit your Package.json file to contain `"com.vertx.nselection": "https://github.com/vertxxyz/NSelection.git",`
