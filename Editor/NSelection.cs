@@ -63,6 +63,12 @@ namespace Vertx
 						GUIContent[] icons = new GUIContent[cS.Length - 1];
 						for (var i = 1; i < cS.Length; i++)
 						{
+							if (cS[i] == null)
+							{
+								icons[i - 1] = GUIContent.none;
+								continue;
+							}
+
 							//Skip the Transform component because it's always the first object
 							icons[i - 1] = new GUIContent(AssetPreview.GetMiniThumbnail(cS[i]), ObjectNames.NicifyVariableName(cS[i].GetType().Name));
 						}
