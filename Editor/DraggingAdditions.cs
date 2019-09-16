@@ -88,6 +88,7 @@ namespace Vertx
 				DockArea = dockArea;
 				style.height = 20;
 				style.minHeight = 20;
+				style.right = 50;
 			}
 
 			private long hoverTargetTime;
