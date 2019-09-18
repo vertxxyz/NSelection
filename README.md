@@ -13,9 +13,11 @@ Press **Escape** or **click** outside the selection list to end the current sele
 
 ![gif](http://vertx.xyz/Images/NSelection/nSelection4.gif)
 
+1.0.2 adds drag and drop between inspectors! Wow!
+
+![gif](http://vertx.xyz/Images/NSelection/nSelectionDragging.gif)
+
 ## Installation
-Ensure your project is on .NET 4.x by navigating to Edit>Project Settings>Player>Configuration>Scripting Runtime Version and switching to .NET 4.x Equivalent.
+Edit your `manifest.json` file to contain `"com.vertx.nselection": "https://github.com/vertxxyz/NSelection.git",`
 
-Pull the project locally and use the Package Manager (Window>Package Manager), adding the package.json file present in the root of the folder with the `+` button.
-
-Or edit your `manifest.json` file to contain `"com.vertx.nselection": "https://github.com/vertxxyz/NSelection.git",`
+To update the package with new changes, remove the lock from the bottom of the `manifest.json` file.
