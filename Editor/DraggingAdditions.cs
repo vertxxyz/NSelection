@@ -52,10 +52,10 @@ namespace Vertx
 			{
 				object panel = panelPI.GetValue(dockArea);
 				VisualElement visualTree = (VisualElement) visualTreePI.GetValue(panel);
-				if (visualTree.Q<DragReceiver>() == null)
-				{
-					visualTree.Add(new DragReceiver(dockArea, visualTree.Q<IMGUIContainer>()));
-				}
+				var imguiContainer = visualTree.Q<IMGUIContainer>();
+				imguiContainer.RegisterCallback<DragEnterEvent>(DragEnter);
+				imguiContainer.RegisterCallback<DragUpdatedEvent, (Object, IMGUIContainer)>(DragUpdated, (dockArea, imguiContainer));
+				imguiContainer.RegisterCallback<DragLeaveEvent>(DragLeave);
 			}
 
 			if (initialised)
@@ -76,202 +76,55 @@ namespace Vertx
 
 			waitToTime = updateTime + refreshTime;
 		}
+		
+		#region Callbacks
+		private static long hoverTargetTime;
+		private static Vector2 enterMousePosition;
+		private const long hoverTime = 250L;
 
-		private class DragReceiver : VisualElement
+		private static void DragEnter(DragEnterEvent evt)
 		{
-			public Object DockArea { get; }
-			private readonly IMGUIContainer imguiContainer;
-
-			public DragReceiver(Object dockArea, IMGUIContainer imguiContainer)
-			{
-				this.imguiContainer = imguiContainer;
-				DockArea = dockArea;
-				style.height = 20;
-				style.minHeight = 20;
-				style.right = 50;
-			}
-
-			private long hoverTargetTime;
-			private Vector2 enterMousePosition;
-			private const long hoverTime = 250L;
-
-			private void DragEnter(DragEnterEvent evt)
-			{
-				hoverTargetTime = evt.timestamp + hoverTime;
-				enterMousePosition = evt.mousePosition;
-			}
-
-			private void DragUpdated(DragUpdatedEvent evt)
-			{
-				long time = evt.timestamp;
-
-				Vector2 mousePosition = evt.mousePosition;
-				if ((mousePosition - enterMousePosition).sqrMagnitude > 100)
-				{
-					enterMousePosition = mousePosition;
-					hoverTargetTime = time + hoverTime;
-					return;
-				}
-
-				long diff = Math.Abs(hoverTargetTime - time);
-				if (diff > 2000L)
-				{
-					//If the time difference between the drag entering and the current time is too large, then this either hasn't initialised, or something else is wrong.
-					return;
-				}
-
-				if (time > hoverTargetTime)
-				{
-					hoverTargetTime = -2;
-					PropertyInfo selectedPI = dockAreaType.GetProperty("selected", BindingFlags.Public | BindingFlags.Instance);
-					MethodInfo getTabAtMousePosMI = dockAreaType.GetMethod("GetTabAtMousePos", BindingFlags.NonPublic | BindingFlags.Instance, null, new[] {typeof(GUIStyle), typeof(Vector2), typeof(Rect)}, null);
-
-					selectedPI.SetValue(DockArea, getTabAtMousePosMI.Invoke(DockArea, new object[] {new GUIStyle("dragtab"), evt.mousePosition, contentRect}));
-
-
-					/*
-					 * //This code removes the drag and drop info and fails to work.
-					 * //Keeping it here for reference purposes
-					 var e = new Event{
-						type = EventType.MouseDown,
-						mousePosition = evt.mousePosition,
-						button = 0
-					};
-					using (MouseDownEvent mouseDownEvent = MouseDownEvent.GetPooled(e))
-					{
-						parent.SendEvent(mouseDownEvent);
-					}*/
-
-					return;
-				}
-			}
-
-			private void DragLeave(DragLeaveEvent evt) => hoverTargetTime = -2;
-
-			protected override void ExecuteDefaultAction(EventBase evt)
-			{
-				if (evt.eventTypeId == DragEnterEvent.TypeId())
-				{
-					DragEnter((DragEnterEvent) evt);
-					return;
-				}
-
-				if (evt.eventTypeId == DragUpdatedEvent.TypeId())
-				{
-					DragUpdated((DragUpdatedEvent) evt);
-					return;
-				}
-
-				if (evt.eventTypeId == DragLeaveEvent.TypeId())
-				{
-					DragLeave((DragLeaveEvent) evt);
-					return;
-				}
-				
-				//This event always seems to need to be re-synthesised
-				if (evt.eventTypeId == ContextClickEvent.TypeId())
-				{
-					Event e = GetEventFromEvt();
-					using (MouseDownEvent mouseDownEvent = MouseDownEvent.GetPooled(e))
-					{
-						mouseDownEvent.target = parent;
-						#if VERBOSE_LOGGING
-						Debug.Log($"CONTEXT: {mouseDownEvent}");
-						#endif
-						parent.SendEvent(mouseDownEvent);
-					}
-					base.ExecuteDefaultAction(evt);
-					return;
-				}
-
-				//The following events need to be re-synthesised if the UIElement Debugger has worked its magic
-				//It seems quite difficult to remove the effects of the UIElement Debugger on this VisualElement
-				//So far, without launching the debugger, with this commented out, the tool works.
-				//Once the debugger inspects a DragReceiver panel they all become solid and stop passing the following events.
-				//Once in this state you can't exit the UIElements Debugger (without spawning a new one to set each other's DragReceivers to PickingMode.Ignore
-				//Or by resetting the layout to something else.
-				//Once in this state, it also seems hard to break out of. Sometimes not even a script reload seems to do it. Argh!
-				/*if (evt.eventTypeId == MouseDownEvent.TypeId())
-				{
-					Event e = GetEventFromEvt();
-					using (MouseDownEvent mouseDownEvent = MouseDownEvent.GetPooled(e))
-					{
-						mouseDownEvent.target = parent;
-						#if VERBOSE_LOGGING
-						Debug.Log(mouseDownEvent);
-						#endif
-						parent.SendEvent(mouseDownEvent);
-					}
-					base.ExecuteDefaultAction(evt);
-					return;
-				}
-
-				if (evt.eventTypeId == MouseUpEvent.TypeId())
-				{
-					Event e = GetEventFromEvt();
-					using (MouseUpEvent mouseUpEvent = MouseUpEvent.GetPooled(e))
-					{
-						mouseUpEvent.target = parent;
-						#if VERBOSE_LOGGING
-						Debug.Log(mouseUpEvent);
-						#endif
-						parent.SendEvent(mouseUpEvent);
-					}
-					base.ExecuteDefaultAction(evt);
-					return;
-				}*/
-				
-				//These events seem unimportant to the function either way (IMGUIContainer doesn't use them)
-				/*if (evt.eventTypeId == PointerDownEvent.TypeId())
-				{
-					Event e = GetEventFromEvt();
-					using (PointerDownEvent pointerDownEvent = PointerDownEvent.GetPooled(e))
-					{
-						pointerDownEvent.target = parent;
-						#if VERBOSE_LOGGING
-						Debug.Log(pointerDownEvent);
-						#endif
-						parent.SendEvent(pointerDownEvent);
-					}
-					base.ExecuteDefaultAction(evt);
-					return;
-				}
-
-				if (evt.eventTypeId == PointerUpEvent.TypeId())
-				{
-					Event e = GetEventFromEvt();
-					using (PointerUpEvent pointerUpEvent = PointerUpEvent.GetPooled(e))
-					{
-						pointerUpEvent.target = parent;
-						#if VERBOSE_LOGGING
-						Debug.Log(pointerUpEvent);
-						#endif
-						parent.SendEvent(pointerUpEvent);
-					}
-					base.ExecuteDefaultAction(evt);
-					return;
-				}*/
-
-				Event GetEventFromEvt()
-				{
-					var imguiEvent = evt.imguiEvent;
-					return new Event
-					{
-						type = imguiEvent.type,
-						button = imguiEvent.button,
-						clickCount = imguiEvent.clickCount,
-						mousePosition = imguiEvent.mousePosition,
-						pointerType = imguiEvent.pointerType,
-						delta = imguiEvent.delta
-					};
-				}
-
-				/*if (evt.eventTypeId == MouseMoveEvent.TypeId() || evt.eventTypeId == PointerMoveEvent.TypeId())
-					return;
-				if(evt.imguiEvent != null)
-					Debug.Log($"{evt} {evt.imguiEvent?.type}");*/
-				base.ExecuteDefaultAction(evt);
-			}
+			hoverTargetTime = evt.timestamp + hoverTime;
+			enterMousePosition = evt.mousePosition;
 		}
+
+		private static void DragUpdated(DragUpdatedEvent evt, (Object dockArea, IMGUIContainer container) args)
+		{
+			Object dockArea = args.dockArea;
+			Rect r = args.container.contentRect;
+			//Ensure that the cursor is in the header.
+			Rect contentRect = new Rect(r.x, r.y, r.width - 50, 20);
+			if (!contentRect.Contains(evt.mousePosition))
+				return;
+			
+			long time = evt.timestamp;
+
+			Vector2 mousePosition = evt.mousePosition;
+			if ((mousePosition - enterMousePosition).sqrMagnitude > 100)
+			{
+				enterMousePosition = mousePosition;
+				hoverTargetTime = time + hoverTime;
+				return;
+			}
+
+			long diff = Math.Abs(hoverTargetTime - time);
+			if (diff > 2000L)
+			{
+				//If the time difference between the drag entering and the current time is too large, then this either hasn't initialised, or something else is wrong.
+				return;
+			}
+
+			if (time <= hoverTargetTime)
+				return;
+			
+			hoverTargetTime = -2;
+			PropertyInfo selectedPI = dockAreaType.GetProperty("selected", BindingFlags.Public | BindingFlags.Instance);
+			MethodInfo getTabAtMousePosMI = dockAreaType.GetMethod("GetTabAtMousePos", BindingFlags.NonPublic | BindingFlags.Instance, null, new[] {typeof(GUIStyle), typeof(Vector2), typeof(Rect)}, null);
+
+			selectedPI.SetValue(dockArea, getTabAtMousePosMI.Invoke(dockArea, new object[] {new GUIStyle("dragtab"), evt.mousePosition, contentRect}));
+		}
+
+		private static void DragLeave(DragLeaveEvent evt) => hoverTargetTime = -2;
+		#endregion
 	}
 }
