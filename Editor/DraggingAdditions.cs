@@ -53,6 +53,10 @@ namespace Vertx
 				object panel = panelPI.GetValue(dockArea);
 				VisualElement visualTree = (VisualElement) visualTreePI.GetValue(panel);
 				var imguiContainer = visualTree.Q<IMGUIContainer>();
+				imguiContainer.UnregisterCallback<DragEnterEvent>(DragEnter);
+				imguiContainer.UnregisterCallback<DragUpdatedEvent, (Object, IMGUIContainer)>(DragUpdated);
+				imguiContainer.UnregisterCallback<DragLeaveEvent>(DragLeave);
+				
 				imguiContainer.RegisterCallback<DragEnterEvent>(DragEnter);
 				imguiContainer.RegisterCallback<DragUpdatedEvent, (Object, IMGUIContainer)>(DragUpdated, (dockArea, imguiContainer));
 				imguiContainer.RegisterCallback<DragLeaveEvent>(DragLeave);
