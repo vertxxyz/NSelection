@@ -63,6 +63,12 @@ namespace Vertx
 						GUIContent[] icons = new GUIContent[cS.Length - 1];
 						for (var i = 1; i < cS.Length; i++)
 						{
+							if (cS[i] == null)
+							{
+								icons[i - 1] = GUIContent.none;
+								continue;
+							}
+
 							//Skip the Transform component because it's always the first object
 							icons[i - 1] = new GUIContent(AssetPreview.GetMiniThumbnail(cS[i]), ObjectNames.NicifyVariableName(cS[i].GetType().Name));
 						}
@@ -127,7 +133,6 @@ namespace Vertx
 		public static float[] iconsOffsets;
 		public static float[] iconsOffsetTargets;
 
-		private static float xOffset;
 		public static float scrollPosition;
 		private static Vector2 originalPosition;
 		private const int maxIcons = 7;
@@ -356,7 +361,7 @@ namespace Vertx
 					{
 						shiftWasHeldForPreview = false;
 						//If we're not selecting more (ie. have shift held) we should just set the selection to be the hovered item
-						Selection.objects = null;
+						Selection.objects = new Object[0];
 						Selection.activeGameObject = gameObject;
 					}
 					else
@@ -486,7 +491,7 @@ namespace Vertx
 			}
 			else
 			{
-				Selection.objects = null;
+				Selection.objects = new Object[0];
 				Selection.activeGameObject = gameObject;
 			}
 
