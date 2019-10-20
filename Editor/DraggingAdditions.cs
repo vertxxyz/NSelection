@@ -4,7 +4,11 @@ using System;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+#if UNITY_2019_1_OR_NEWER
 using UnityEngine.UIElements;
+#else
+using UnityEngine.Experimental.UIElements;
+#endif
 using Object = UnityEngine.Object;
 
 namespace Vertx
@@ -29,7 +33,11 @@ namespace Vertx
 			{
 				dockAreaType = Type.GetType("UnityEditor.DockArea, UnityEditor");
 				guiViewType = Type.GetType("UnityEditor.GUIView, UnityEditor");
+				#if UNITY_2019_1_OR_NEWER
 				panelType = Type.GetType("UnityEngine.UIElements.Panel, UnityEngine");
+				#else
+				panelType = Type.GetType("UnityEngine.Experimental.UIElements.Panel, UnityEngine");
+				#endif
 
 				if (dockAreaType == null || guiViewType == null)
 				{
@@ -56,7 +64,7 @@ namespace Vertx
 				imguiContainer.UnregisterCallback<DragEnterEvent>(DragEnter);
 				imguiContainer.UnregisterCallback<DragUpdatedEvent, (Object, IMGUIContainer)>(DragUpdated);
 				imguiContainer.UnregisterCallback<DragLeaveEvent>(DragLeave);
-				
+
 				imguiContainer.RegisterCallback<DragEnterEvent>(DragEnter);
 				imguiContainer.RegisterCallback<DragUpdatedEvent, (Object, IMGUIContainer)>(DragUpdated, (dockArea, imguiContainer));
 				imguiContainer.RegisterCallback<DragLeaveEvent>(DragLeave);
@@ -80,8 +88,9 @@ namespace Vertx
 
 			waitToTime = updateTime + refreshTime;
 		}
-		
+
 		#region Callbacks
+
 		private static long hoverTargetTime;
 		private static Vector2 enterMousePosition;
 		private const long hoverTime = 250L;
@@ -100,7 +109,7 @@ namespace Vertx
 			Rect contentRect = new Rect(r.x, r.y, r.width - 50, 20);
 			if (!contentRect.Contains(evt.mousePosition))
 				return;
-			
+
 			long time = evt.timestamp;
 
 			Vector2 mousePosition = evt.mousePosition;
@@ -120,7 +129,7 @@ namespace Vertx
 
 			if (time <= hoverTargetTime)
 				return;
-			
+
 			hoverTargetTime = -2;
 			PropertyInfo selectedPI = dockAreaType.GetProperty("selected", BindingFlags.Public | BindingFlags.Instance);
 			MethodInfo getTabAtMousePosMI = dockAreaType.GetMethod("GetTabAtMousePos", BindingFlags.NonPublic | BindingFlags.Instance, null, new[] {typeof(GUIStyle), typeof(Vector2), typeof(Rect)}, null);
@@ -129,6 +138,7 @@ namespace Vertx
 		}
 
 		private static void DragLeave(DragLeaveEvent evt) => hoverTargetTime = -2;
+
 		#endregion
 	}
 }
