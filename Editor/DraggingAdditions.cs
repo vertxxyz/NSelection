@@ -30,36 +30,68 @@ namespace Vertx
 		static void Initialise()
 		{
 			if (!initialised)
-			{
-				dockAreaType = Type.GetType("UnityEditor.DockArea, UnityEditor");
-				guiViewType = Type.GetType("UnityEditor.GUIView, UnityEditor");
-				#if UNITY_2019_1_OR_NEWER
-				panelType = Type.GetType("UnityEngine.UIElements.Panel, UnityEngine");
-				#else
-				panelType = Type.GetType("UnityEngine.Experimental.UIElements.Panel, UnityEngine");
-				#endif
-
-				if (dockAreaType == null || guiViewType == null)
+			{				
+				var editorAssembly = typeof(UnityEditor.EditorWindow).Assembly;
+				dockAreaType = editorAssembly.GetType("UnityEditor.DockArea");
+				if (dockAreaType == null)
 				{
-					Debug.LogWarning($"{nameof(DraggingAdditions)} is not compatible with this Unity version. Either see if there is an update, or remove it from your project.");
+					ShowNotCompatibleError("type UnityEditor.DockArea not found");
+					return;
+				}
+				
+				guiViewType = editorAssembly.GetType("UnityEditor.GUIView");
+				if (guiViewType == null)
+				{
+					ShowNotCompatibleError("type UnityEditor.GUIView not found");
+					return;
+				}
+				
+				#if UNITY_2019_1_OR_NEWER
+				windowBackendPI = guiViewType.GetProperty("windowBackend",BindingFlags.NonPublic | BindingFlags.Instance);
+				if (windowBackendPI == null)
+				{
+					ShowNotCompatibleError("property UnityEditor.GUIView.windowBackend not found");
 					return;
 				}
 
+				IWindowBackendType = editorAssembly.GetType("UnityEditor.IWindowBackend");
+				if (IWindowBackendType == null)
+				{
+					ShowNotCompatibleError("UnityEditor.IWindowBackend type not found");
+					return;
+				}
+
+				visualTreePI = IWindowBackendType.GetProperty("visualTree", BindingFlags.Public | BindingFlags.Instance);
+#else
+				var unityAssembly = typeof(UnityEngine.Vector3).Assembly;
+				panelType = unityAssembly.GetType("UnityEngine.Experimental.UIElements.Panel");
 				panelPI = guiViewType.GetProperty("panel", BindingFlags.NonPublic | BindingFlags.Instance);
 				visualTreePI = panelType.GetProperty("visualTree", BindingFlags.Public | BindingFlags.Instance);
 
-				if (panelPI == null || visualTreePI == null)
+				if (panelPI == null)
 				{
-					Debug.LogWarning($"{nameof(DraggingAdditions)} is not compatible with this Unity version. Either see if there is an update, or remove it from your project.");
+					ShowNotCompatibleError("property UnityEditor.GUIView.panel not found");
 					return;
 				}
+#endif
+			}
+
+			if (visualTreePI == null)
+			{
+				ShowNotCompatibleError("property IWindowBackend.visualTree not found");
+				return;
 			}
 
 			Object[] dockAreas = Resources.FindObjectsOfTypeAll(dockAreaType);
 			foreach (Object dockArea in dockAreas)
 			{
+#if UNITY_2019_1_OR_NEWER
+				var windowBackend = windowBackendPI.GetValue(dockArea);
+				VisualElement visualTree = (VisualElement) visualTreePI.GetValue(windowBackend);
+#else
 				object panel = panelPI.GetValue(dockArea);
 				VisualElement visualTree = (VisualElement) visualTreePI.GetValue(panel);
+#endif
 				var imguiContainer = visualTree.Q<IMGUIContainer>();
 				imguiContainer.UnregisterCallback<DragEnterEvent>(DragEnter);
 				imguiContainer.UnregisterCallback<DragUpdatedEvent, (Object, IMGUIContainer)>(DragUpdated);
@@ -76,6 +108,11 @@ namespace Vertx
 			initialised = true;
 			waitToTime = Time.realtimeSinceStartup + refreshTime;
 			EditorApplication.update += Update;
+		}
+		
+		private static void ShowNotCompatibleError(string reason = null) {
+			var extraMessage = string.IsNullOrEmpty(reason) ? string.Empty : $", because {reason}";
+			Debug.LogWarning($"{nameof(DraggingAdditions)} is not compatible with this Unity version{extraMessage}. Either see if there is an update, or remove it from your project.");
 		}
 
 		private static void Update()
