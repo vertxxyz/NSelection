@@ -1,5 +1,4 @@
-﻿#define VERBOSE_LOGGING
-
+﻿#if !DISABLE_DRAGGING_ADDITIONS
 using System;
 using System.Reflection;
 using UnityEditor;
@@ -20,46 +19,96 @@ namespace Vertx
 
 		private static Type dockAreaType;
 		private static Type guiViewType;
+		#if UNITY_2020_1_OR_NEWER
+		private static Type iWindowBackendType;
+		private static PropertyInfo windowBackendPI;
+		#else
 		private static Type panelType;
 		private static PropertyInfo panelPI;
+		#endif
 		private static PropertyInfo visualTreePI;
 		private static bool initialised;
 		private const float refreshTime = 20;
 		private static float waitToTime;
 
+		//Types
+		private const string
+			k_DockArea = "UnityEditor.DockArea",
+			k_GUIView = "UnityEditor.GUIView",
+			#if UNITY_2020_1_OR_NEWER
+			k_IWindowBackend = "UnityEditor.IWindowBackend";
+			#elif UNITY_2019_1_OR_NEWER
+			k_Panel = "UnityEngine.UIElements.Panel";
+		#else
+			k_Panel = "UnityEngine.Experimental.UIElements.Panel";
+		#endif
+
+		//Properties
+		private const string
+			#if UNITY_2020_1_OR_NEWER
+			k_WindowBackend = "windowBackend",
+			k_WindowBackendVisualTree = "visualTree";
+			#else
+			k_GUIViewPanel = "panel",
+			k_PanelVisualTree = "visualTree";
+		#endif
+
 		static void Initialise()
 		{
 			if (!initialised)
 			{
-				dockAreaType = Type.GetType("UnityEditor.DockArea, UnityEditor");
-				guiViewType = Type.GetType("UnityEditor.GUIView, UnityEditor");
-				#if UNITY_2019_1_OR_NEWER
-				panelType = Type.GetType("UnityEngine.UIElements.Panel, UnityEngine");
+				Assembly editorAssembly = typeof(EditorWindow).Assembly;
+				//Dock Area
+				dockAreaType = editorAssembly.GetType(k_DockArea);
+				if (ShowNotCompatibleError(dockAreaType, $"Type {k_DockArea} was not found"))
+					return;
+
+				//GUIView
+				guiViewType = editorAssembly.GetType(k_GUIView);
+				if (ShowNotCompatibleError(guiViewType, $"Type {k_GUIView} was not found"))
+					return;
+
+
+				#if UNITY_2020_1_OR_NEWER
+				//Retrieving the visual tree (VisualElement) from Window Backend in GUIView
+				windowBackendPI = guiViewType.GetProperty(k_WindowBackend, BindingFlags.NonPublic | BindingFlags.Instance);
+				if (ShowNotCompatibleError(windowBackendPI, $"Property {k_WindowBackend} was not found on {guiViewType}"))
+					return;
+				
+				iWindowBackendType = editorAssembly.GetType(k_IWindowBackend);
+				if (ShowNotCompatibleError(iWindowBackendType, $"Type {k_IWindowBackend} was not found"))
+					return;
+
+				visualTreePI = iWindowBackendType.GetProperty(k_WindowBackendVisualTree, BindingFlags.Public | BindingFlags.Instance);
+				if (ShowNotCompatibleError(visualTreePI, $"Property {k_WindowBackendVisualTree} was not found on {iWindowBackendType}"))
+					return;
 				#else
-				panelType = Type.GetType("UnityEngine.Experimental.UIElements.Panel, UnityEngine");
+				//Retrieving the visual tree (VisualElement) from Panel in GUIView
+				Assembly uiElementsAssembly = typeof(VisualElement).Assembly;
+				panelType = uiElementsAssembly.GetType(k_Panel);
+				if (ShowNotCompatibleError(panelType, $"Type {k_Panel} was not found"))
+					return;
+				panelPI = guiViewType.GetProperty(k_GUIViewPanel, BindingFlags.NonPublic | BindingFlags.Instance);
+				visualTreePI = panelType.GetProperty(k_PanelVisualTree, BindingFlags.Public | BindingFlags.Instance);
+
+				if (ShowNotCompatibleError(panelPI, $"Property {k_GUIViewPanel} was not found on {guiViewType}"))
+					return;
+				if (ShowNotCompatibleError(panelPI, $"Property {k_PanelVisualTree} was not found on {panelType}"))
+					return;
 				#endif
-
-				if (dockAreaType == null || guiViewType == null)
-				{
-					Debug.LogWarning($"{nameof(DraggingAdditions)} is not compatible with this Unity version. Either see if there is an update, or remove it from your project.");
-					return;
-				}
-
-				panelPI = guiViewType.GetProperty("panel", BindingFlags.NonPublic | BindingFlags.Instance);
-				visualTreePI = panelType.GetProperty("visualTree", BindingFlags.Public | BindingFlags.Instance);
-
-				if (panelPI == null || visualTreePI == null)
-				{
-					Debug.LogWarning($"{nameof(DraggingAdditions)} is not compatible with this Unity version. Either see if there is an update, or remove it from your project.");
-					return;
-				}
 			}
 
 			Object[] dockAreas = Resources.FindObjectsOfTypeAll(dockAreaType);
 			foreach (Object dockArea in dockAreas)
 			{
+				//Inject callbacks into the dock area visual elements.
+				#if UNITY_2020_1_OR_NEWER
+				object windowBackend = windowBackendPI.GetValue(dockArea);
+				VisualElement visualTree = (VisualElement) visualTreePI.GetValue(windowBackend);
+				#else
 				object panel = panelPI.GetValue(dockArea);
 				VisualElement visualTree = (VisualElement) visualTreePI.GetValue(panel);
+				#endif
 				var imguiContainer = visualTree.Q<IMGUIContainer>();
 				imguiContainer.UnregisterCallback<DragEnterEvent>(DragEnter);
 				imguiContainer.UnregisterCallback<DragUpdatedEvent, (Object, IMGUIContainer)>(DragUpdated);
@@ -76,6 +125,23 @@ namespace Vertx
 			initialised = true;
 			waitToTime = Time.realtimeSinceStartup + refreshTime;
 			EditorApplication.update += Update;
+		}
+
+		/// <summary>
+		/// Shows the warning informing the user that this in incompatible
+		/// </summary>
+		/// <param name="query">The object to query for null</param>
+		/// <param name="reason">Optional reason for incompatibility</param>
+		/// <returns>True if incompatible</returns>
+		private static bool ShowNotCompatibleError(object query, string reason = null)
+		{
+			if (query != null)
+				return false;
+			var extraMessage = string.IsNullOrEmpty(reason) ? string.Empty : $", because {reason}";
+			Debug.LogWarning(
+				$"{nameof(DraggingAdditions)} is not compatible with this Unity version{extraMessage}.\n" +
+				"Either see if there is an update, add \"DISABLE_DRAGGING_ADDITIONS\" to your Scripting Define Symbols, or remove it from your project.");
+			return true;
 		}
 
 		private static void Update()
@@ -132,7 +198,8 @@ namespace Vertx
 
 			hoverTargetTime = -2;
 			PropertyInfo selectedPI = dockAreaType.GetProperty("selected", BindingFlags.Public | BindingFlags.Instance);
-			MethodInfo getTabAtMousePosMI = dockAreaType.GetMethod("GetTabAtMousePos", BindingFlags.NonPublic | BindingFlags.Instance, null, new[] {typeof(GUIStyle), typeof(Vector2), typeof(Rect)}, null);
+			MethodInfo getTabAtMousePosMI = dockAreaType.GetMethod("GetTabAtMousePos", BindingFlags.NonPublic | BindingFlags.Instance, null,
+				new[] {typeof(GUIStyle), typeof(Vector2), typeof(Rect)}, null);
 
 			selectedPI.SetValue(dockArea, getTabAtMousePosMI.Invoke(dockArea, new object[] {new GUIStyle("dragtab"), evt.mousePosition, contentRect}));
 		}
@@ -142,3 +209,4 @@ namespace Vertx
 		#endregion
 	}
 }
+#endif
