@@ -150,7 +150,9 @@ namespace Vertx
 			if (waitToTime > updateTime)
 				return;
 
-			Initialise();
+			//Only reinitialise if the application has focus.
+			if(UnityEditorInternal.InternalEditorUtility.isApplicationActive)
+				Initialise();
 
 			waitToTime = updateTime + refreshTime;
 		}

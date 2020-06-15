@@ -51,14 +51,39 @@ namespace Vertx
 				//The actual CTRL+RIGHT-MOUSE functionality
 				if (mouseRightIsDownWithoutDrag && e.rawType == EventType.MouseUp)
 				{
-					SelectionPopup.totalSelection = GetAllOverlapping(e.mousePosition).ToArray();
-
-					SelectionPopup.icons = new GUIContent[SelectionPopup.totalSelection.Length][];
-					SelectionPopup.iconsOffsets = new float[SelectionPopup.totalSelection.Length];
-					SelectionPopup.iconsOffsetTargets = new float[SelectionPopup.totalSelection.Length];
-					for (var t = 0; t < SelectionPopup.totalSelection.Length; t++)
+					var allOverlapping = GetAllOverlapping(e.mousePosition);
+					List<SelectionItem> totalSelection = SelectionPopup.totalSelection;
+					totalSelection.Clear();
+					foreach (var overlapping in allOverlapping)
 					{
-						GameObject gO = SelectionPopup.totalSelection[t];
+						GameObject gO = overlapping;
+
+						//Check whether the parents of a rect transform have a disabled canvas in them.
+						if (gO.transform is RectTransform rectTransform)
+						{
+							var canvas = rectTransform.GetComponentInParent<Canvas>();
+							if(canvas != null)
+							{
+								if (!canvas.enabled)
+									continue;
+								bool canvasInParentsEnabled = true;
+								while (canvas != null)
+								{
+									Transform parent = canvas.transform.parent;
+									if (parent != null)
+									{
+										canvas = parent.GetComponentInParent<Canvas>();
+										if (canvas == null || canvas.enabled)
+											continue;
+										canvasInParentsEnabled = false;
+									}
+									break;
+								}
+								if(!canvasInParentsEnabled)
+									continue;
+							}
+						}
+						
 						Component[] cS = gO.GetComponents<Component>();
 						GUIContent[] icons = new GUIContent[cS.Length - 1];
 						for (var i = 1; i < cS.Length; i++)
@@ -72,10 +97,7 @@ namespace Vertx
 							//Skip the Transform component because it's always the first object
 							icons[i - 1] = new GUIContent(AssetPreview.GetMiniThumbnail(cS[i]), ObjectNames.NicifyVariableName(cS[i].GetType().Name));
 						}
-
-						SelectionPopup.icons[t] = icons;
-						SelectionPopup.iconsOffsets[t] = 0;
-						SelectionPopup.iconsOffsetTargets[t] = 0;
+						totalSelection.Add(new SelectionItem(gO, icons));
 					}
 
 					Vector2 selectionPosition = e.mousePosition;
@@ -85,7 +107,7 @@ namespace Vertx
 						xOffset = -width;
 					else
 						xOffset = 0;
-					int value = Mathf.CeilToInt(((selectionPosition.y + height * SelectionPopup.totalSelection.Length) - sceneView.position.height + 10) / height);
+					int value = Mathf.CeilToInt(((selectionPosition.y + height * totalSelection.Count) - sceneView.position.height + 10) / height);
 					SelectionPopup.scrollPosition = Mathf.Max(0, value);
 
 					SelectionPopup popup = SelectionPopup.ShowModal(
@@ -93,7 +115,7 @@ namespace Vertx
 							sceneView.position.x + e.mousePosition.x + xOffset,
 							sceneView.position.y + e.mousePosition.y + height * 1.5f,
 							width,
-							height * SelectionPopup.totalSelection.Length + 1 + 5*2
+							height * totalSelection.Count + 1 + 5*2
 						)
 					);
 					if (popup == null)
@@ -127,11 +149,23 @@ namespace Vertx
 		#endregion
 	}
 
+	public class SelectionItem
+	{
+		public GameObject GameObject { get; }
+		public GUIContent[] Icons { get; }
+		public SelectionItem(GameObject gameObject, GUIContent[] icons)
+		{
+			GameObject = gameObject;
+			Icons = icons;
+		}
+	}
+	
 	public class SelectionPopup : EditorWindow
 	{
-		public static GUIContent[][] icons;
-		public static float[] iconsOffsets;
-		public static float[] iconsOffsetTargets;
+		public static List<SelectionItem> totalSelection = new List<SelectionItem>();
+		private static float iconOffset;
+		private static float iconOffsetTarget;
+		private static int currentlyHoveringIndex;
 
 		public static float scrollPosition;
 		private static Vector2 originalPosition;
@@ -173,7 +207,7 @@ namespace Vertx
 
 		public static SelectionPopup ShowModal(Rect r)
 		{
-			if (totalSelection == null || totalSelection.Length == 0)
+			if (totalSelection.Count == 0)
 				return null;
 			SelectionPopup popup = CreateInstance<SelectionPopup>();
 			popup.ShowAsDropDown(new Rect(r.position, Vector2.zero), r.size);
@@ -222,8 +256,6 @@ namespace Vertx
 
 		private int scrollDelta;
 
-		public static GameObject[] totalSelection;
-
 		private static readonly HashSet<GameObject> currentSelection = new HashSet<GameObject>();
 		private int lastIndexHighlighted = -1;
 		private bool shiftWasHeldForPreview;
@@ -242,7 +274,7 @@ namespace Vertx
 			if (scrollDelta != 0)
 			{
 				scrollPosition += scrollDelta;
-				scrollPosition = Mathf.Clamp(scrollPosition, 0, totalSelection.Length - 1);
+				scrollPosition = Mathf.Clamp(scrollPosition, 0, totalSelection.Count - 1);
 				Rect tempRect = position;
 				tempRect.position = new Vector2(originalPosition.x, originalPosition.y - scrollPosition * NSelection.height);
 				ShowAsDropDown(new Rect(tempRect.position, Vector2.zero), tempRect.size);
@@ -252,15 +284,17 @@ namespace Vertx
 			
 			//Top and bottom borders (to fix a weird issue where the top 5 pixels of the window do not receive mouse events)
 			EditorGUI.DrawRect(new Rect(0, 0, NSelection.width, 5), GUI.color);
-			EditorGUI.DrawRect(new Rect(0, 6 + NSelection.height * totalSelection.Length, NSelection.width, 5), GUI.color);
+			EditorGUI.DrawRect(new Rect(0, 6 + NSelection.height * totalSelection.Count, NSelection.width, 5), GUI.color);
 			
 			
 			Rect separatorTopRect = new Rect(0, 5, NSelection.width, 1);
 			EditorGUI.DrawRect(separatorTopRect, boxBorderColor);
 
-			for (var i = 0; i < totalSelection.Length; i++)
+			for (var i = 0; i < totalSelection.Count; i++)
 			{
-				GameObject gameObject = totalSelection[i];
+				SelectionItem selectionItem = totalSelection[i];
+				GameObject gameObject = selectionItem.GameObject;
+				GUIContent[] icons = selectionItem.Icons;
 
 				Rect boxRect = new Rect(0, 5 + 1 + i * NSelection.height, NSelection.width, NSelection.height);
 				GUIStyle labelStyle;
@@ -312,40 +346,40 @@ namespace Vertx
 				GUI.color = Color.white;
 				GUI.Label(new Rect(boxRect.x + 20, boxRect.y, NSelection.width - 20, boxRect.height), gameObject.name, labelStyle);
 
-				GUIContent[] iconsLocal = icons[i];
-				if (iconsLocal.Length > 0)
+				if (icons.Length > 0)
 				{
-					int maxLength = Mathf.Min(iconsLocal.Length, maxIcons);
+					int maxLength = Mathf.Min(icons.Length, maxIcons);
 					float width = NSelection.height * maxLength;
 					Rect iconsRect = new Rect(boxRect.x + boxRect.width - maxLength * NSelection.height, boxRect.y, width, NSelection.height);
-					float iconOffset = 0;
 
 					//Behaviour for scrolling icons when the cursor is over the selection (only if the icon count is greater than maxIcons)
-					if (contains && maxLength < iconsLocal.Length)
+					if (contains && maxLength < icons.Length)
 					{
-						float max = iconsLocal.Length - maxLength;
-						iconsOffsets[i] = Mathf.MoveTowards(iconsOffsets[i], iconsOffsetTargets[i], (float) (EditorApplication.timeSinceStartup - lastTime));
-						if (iconsOffsets[i] <= 0)
+						if (currentlyHoveringIndex != i)
 						{
-							iconsOffsets[i] = 0;
-							iconsOffsetTargets[i] = max;
+							currentlyHoveringIndex = i;
+							iconOffset = 0;
 						}
-						else if (iconsOffsets[i] >= max)
+						
+						float max = icons.Length - maxLength;
+						iconOffset = Mathf.MoveTowards(iconOffset, iconOffsetTarget, (float) (EditorApplication.timeSinceStartup - lastTime));
+						if (iconOffset <= 0)
 						{
-							iconsOffsets[i] = max;
-							iconsOffsetTargets[i] = 0;
+							iconOffset = 0;
+							iconOffsetTarget = max;
 						}
-
-						iconOffset = iconsOffsets[i];
+						else if (iconOffset >= max)
+						{
+							iconOffset = max;
+							iconOffsetTarget = 0;
+						}
 					}
-					else
-						iconsOffsets[i] = iconOffset;
 
 					using (new GUI.GroupScope(iconsRect))
 					{
-						for (var j = 0; j < iconsLocal.Length; j++)
+						for (var j = 0; j < icons.Length; j++)
 						{
-							GUIContent icon = iconsLocal[j];
+							GUIContent icon = icons[j];
 							GUI.Label(new Rect(width - (maxLength - j) * NSelection.height - iconOffset * NSelection.height, 0, NSelection.height, NSelection.height), icon);
 						}
 					}
@@ -446,7 +480,7 @@ namespace Vertx
 			Tools.viewTool = ViewTool.None;
 
 			scrollPosition = 0;
-			totalSelection = null;
+			totalSelection.Clear();
 			currentSelection.Clear();
 			SceneView.RepaintAll();
 			Close();
@@ -476,7 +510,7 @@ namespace Vertx
 
 		void MakeSelection(int index, bool isShift)
 		{
-			GameObject gameObject = totalSelection[index];
+			GameObject gameObject = totalSelection[index].GameObject;
 			bool selectionContains = currentSelection.Contains(gameObject);
 
 			if (isShift)

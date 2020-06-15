@@ -1,0 +1,23 @@
+{
+    "name": "nSelection",
+    "references": [
+        "GUID:2bafac87e7f4b9b418d9448d219b01ab"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.ugui",
+            "expression": "0.0",
+            "define": "UNITY_UI"
+        }
+    ],
+    "noEngineReferences": false
+}
