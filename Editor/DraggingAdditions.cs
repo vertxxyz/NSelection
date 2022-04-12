@@ -13,7 +13,7 @@ using Object = UnityEngine.Object;
 namespace Vertx
 {
 	[InitializeOnLoad]
-	public static class DraggingAdditions
+	internal static class DraggingAdditions
 	{
 		static DraggingAdditions() => EditorApplication.delayCall += Initialise;
 
