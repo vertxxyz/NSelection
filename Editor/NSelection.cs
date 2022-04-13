@@ -118,7 +118,7 @@ namespace Vertx
 				xOffset = -SelectionPopup.Width;
 			else
 				xOffset = 0;
-			int value = Mathf.CeilToInt(((selectionPosition.y + SelectionPopup.Height * totalSelection.Count) -
+			int value = Mathf.CeilToInt((selectionPosition.y + SelectionPopup.Height * totalSelection.Count -
 				sceneView.position.height + 10) / SelectionPopup.Height);
 			SelectionPopup.ScrollPosition = Mathf.Max(0, value);
 
@@ -367,6 +367,7 @@ namespace Vertx
 			SceneView.onSceneGUIDelegate += CaptureEvents;
 #endif
 			_originalPosition = editorWindow.position.position;
+			editorWindow.wantsMouseMove = true;
 		}
 
 		public const float Width = 250f;
@@ -475,7 +476,7 @@ namespace Vertx
 					{
 						// If we're not holding control and we're not hovering it will deselect these, so show that preview.
 						// Otherwise, we will be selecting additionally.
-						GUI.color = !(additive)
+						GUI.color = !additive
 							? new Color(0.58f, 0.62f, 0.75f)
 							: new Color(0f, 0.5f, 1f);
 					}
@@ -560,11 +561,11 @@ namespace Vertx
 					}
 					else
 					{
-						ResetHierarchyToExpandedState();
 						_additionWasLastHeldForPreview = true;
 						// Otherwise we need to alter the current selection to add or remove the currently hovered selection.
 						if (isInSelection)
 						{
+							ResetHierarchyToExpandedState();
 							// Remove the GameObject.
 							Object[] newSelection = new Object[_currentSelection.Count - 1];
 							int n = 0;
@@ -578,6 +579,7 @@ namespace Vertx
 						}
 						else
 						{
+							ResetHierarchyToExpandedStateExcept(gameObject);
 							// Add the GameObject.
 							Object[] newSelection = new Object[_currentSelection.Count + 1];
 							int n = 0;
@@ -625,10 +627,6 @@ namespace Vertx
 
 			if (e.type != EventType.Repaint && e.type != EventType.Layout)
 				e.Use();
-
-			//editorWindow.Focus();
-
-			editorWindow.Repaint();
 
 			lastTime = EditorApplication.timeSinceStartup;
 		}
