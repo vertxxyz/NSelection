@@ -1,4 +1,8 @@
-﻿/*Thomas Ingram 2018*/
+﻿/* Thomas Ingram 2018 */
+
+#if UNITY_2021_1_OR_NEWER
+#define USES_PROPERTIES
+#endif
 
 using System;
 using System.Collections.Generic;
@@ -6,8 +10,11 @@ using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
+using UnityEditor.ShortcutManagement;
 using UnityEngine;
 using Object = UnityEngine.Object;
+
+// ReSharper disable ConvertToNullCoalescingCompoundAssignment
 
 namespace Vertx
 {
@@ -16,213 +23,357 @@ namespace Vertx
 	{
 		static NSelection() => RefreshListeners();
 
-		static void RefreshListeners()
+		private static void RefreshListeners()
 		{
-			#if UNITY_2019_1_OR_NEWER
+#if UNITY_2019_1_OR_NEWER
 			SceneView.duringSceneGui -= OnSceneGUI;
 			SceneView.duringSceneGui += OnSceneGUI;
-			#else
+#else
 			SceneView.onSceneGUIDelegate -= OnSceneGUI;
 			SceneView.onSceneGUIDelegate += OnSceneGUI;
-			#endif
+#endif
 		}
 
-		static bool mouseRightIsDownWithoutDrag;
+		private static bool _mouseRightIsDownWithoutDrag;
 
-		public const float width = 250f;
-		public const float height = 16f;
-
-		static void OnSceneGUI(SceneView sceneView)
+		private static void OnSceneGUI(SceneView sceneView)
 		{
 			Event e = Event.current;
 
-			if (e.type != EventType.Used && e.control && e.isMouse && e.button == 1)
+			if (e.type == EventType.Used || !e.control || !e.isMouse || e.button != 1 || e.shift || e.alt)
+				return;
+
+			switch (e.rawType)
 			{
-				switch (e.rawType)
-				{
-					case EventType.MouseDown:
-						mouseRightIsDownWithoutDrag = true;
-						break;
-					case EventType.MouseDrag:
-						mouseRightIsDownWithoutDrag = false;
-						break;
-				}
-
-				//The actual CTRL+RIGHT-MOUSE functionality
-				if (mouseRightIsDownWithoutDrag && e.rawType == EventType.MouseUp)
-				{
-					var allOverlapping = GetAllOverlapping(e.mousePosition);
-					List<SelectionItem> totalSelection = SelectionPopup.totalSelection;
-					totalSelection.Clear();
-					foreach (var overlapping in allOverlapping)
-					{
-						GameObject gO = overlapping;
-
-						//Check whether the parents of a rect transform have a disabled canvas in them.
-						if (gO.transform is RectTransform rectTransform)
-						{
-							var canvas = rectTransform.GetComponentInParent<Canvas>();
-							if(canvas != null)
-							{
-								if (!canvas.enabled)
-									continue;
-								bool canvasInParentsEnabled = true;
-								while (canvas != null)
-								{
-									Transform parent = canvas.transform.parent;
-									if (parent != null)
-									{
-										canvas = parent.GetComponentInParent<Canvas>();
-										if (canvas == null || canvas.enabled)
-											continue;
-										canvasInParentsEnabled = false;
-									}
-									break;
-								}
-								if(!canvasInParentsEnabled)
-									continue;
-							}
-						}
-						
-						Component[] cS = gO.GetComponents<Component>();
-						GUIContent[] icons = new GUIContent[cS.Length - 1];
-						for (var i = 1; i < cS.Length; i++)
-						{
-							if (cS[i] == null)
-							{
-								icons[i - 1] = GUIContent.none;
-								continue;
-							}
-
-							//Skip the Transform component because it's always the first object
-							icons[i - 1] = new GUIContent(AssetPreview.GetMiniThumbnail(cS[i]), ObjectNames.NicifyVariableName(cS[i].GetType().Name));
-						}
-						totalSelection.Add(new SelectionItem(gO, icons));
-					}
-
-					Vector2 selectionPosition = e.mousePosition;
-					float xOffset;
-					//Screen-rect limits offset
-					if (selectionPosition.x + width > sceneView.position.width)
-						xOffset = -width;
-					else
-						xOffset = 0;
-					int value = Mathf.CeilToInt(((selectionPosition.y + height * totalSelection.Count) - sceneView.position.height + 10) / height);
-					SelectionPopup.scrollPosition = Mathf.Max(0, value);
-
-					SelectionPopup popup = SelectionPopup.ShowModal(
-						new Rect(
-							sceneView.position.x + e.mousePosition.x + xOffset,
-							sceneView.position.y + e.mousePosition.y + height * 1.5f,
-							width,
-							height * totalSelection.Count + 1 + 5*2
-						)
-					);
-					if (popup == null)
-					{
-						e.Use();
-						return;
-					}
-
-
-					e.alt = false;
-					mouseRightIsDownWithoutDrag = false;
-					SelectionPopup.RefreshSelection();
-
-					e.Use();
-				}
+				case EventType.MouseDown:
+					_mouseRightIsDownWithoutDrag = true;
+					break;
+				case EventType.MouseDrag:
+					_mouseRightIsDownWithoutDrag = false;
+					break;
 			}
+
+			//The actual CTRL+RIGHT-MOUSE functionality
+			if (!_mouseRightIsDownWithoutDrag || e.rawType != EventType.MouseUp)
+				return;
+
+			IEnumerable<GameObject> allOverlapping = GetAllOverlapping(e.mousePosition);
+			List<SelectionItem> totalSelection = SelectionPopup.TotalSelection;
+			totalSelection.Clear();
+			foreach (GameObject overlapping in allOverlapping)
+			{
+				//Check whether the parents of a rect transform have a disabled canvas in them.
+				if (overlapping.transform is RectTransform rectTransform)
+				{
+					var canvas = rectTransform.GetComponentInParent<Canvas>();
+					if (canvas != null)
+					{
+						if (!canvas.enabled)
+							continue;
+						bool canvasInParentsEnabled = true;
+						while (canvas != null)
+						{
+							Transform parent = canvas.transform.parent;
+							if (parent != null)
+							{
+								canvas = parent.GetComponentInParent<Canvas>();
+								if (canvas == null || canvas.enabled)
+									continue;
+								canvasInParentsEnabled = false;
+							}
+
+							break;
+						}
+
+						if (!canvasInParentsEnabled)
+							continue;
+					}
+				}
+
+				Component[] components = overlapping.GetComponents<Component>();
+				GUIContent[] icons = new GUIContent[components.Length - 1];
+				for (var i = 1; i < components.Length; i++)
+				{
+					if (components[i] == null)
+					{
+						icons[i - 1] = GUIContent.none;
+						continue;
+					}
+
+					//Skip the Transform component because it's always the first object
+					icons[i - 1] = new GUIContent(AssetPreview.GetMiniThumbnail(components[i]),
+						ObjectNames.NicifyVariableName(components[i].GetType().Name));
+				}
+
+				totalSelection.Add(new SelectionItem(overlapping, icons));
+			}
+
+			if (totalSelection.Count == 0)
+				return;
+
+			Vector2 selectionPosition = e.mousePosition;
+			float xOffset;
+			// Screen-rect limits offset.
+			if (selectionPosition.x + SelectionPopup.Width > sceneView.position.width)
+				xOffset = -SelectionPopup.Width;
+			else
+				xOffset = 0;
+			int value = Mathf.CeilToInt((selectionPosition.y + SelectionPopup.Height * totalSelection.Count -
+				sceneView.position.height + 10) / SelectionPopup.Height);
+			SelectionPopup.ScrollPosition = Mathf.Max(0, value);
+
+			// Display popup.
+			var buttonRect = new Rect(
+				e.mousePosition.x + xOffset - 1,
+				e.mousePosition.y - 6,
+				0, 0
+			);
+
+			e.alt = false;
+			_mouseRightIsDownWithoutDrag = false;
+			e.Use();
+
+			PopupWindow.Show(buttonRect, new SelectionPopup());
+
+			// No events after Show. ExitGUI is called.
 		}
 
 		#region Overlapping
 
-		static IEnumerable<GameObject> GetAllOverlapping(Vector2 position) => (IEnumerable<GameObject>) getAllOverlapping.Invoke(null, new object[] {position});
+		private static IEnumerable<GameObject> GetAllOverlapping(Vector2 position) =>
+			_getAllOverlapping.Invoke(position);
 
-		static MethodInfo _getAllOverlapping;
+		private static readonly Func<Vector2, IEnumerable<GameObject>> _getAllOverlapping =
+			(Func<Vector2, IEnumerable<GameObject>>)Delegate.CreateDelegate(
+				typeof(Func<Vector2, IEnumerable<GameObject>>),
+				SceneViewPickingClass.GetMethod("GetAllOverlapping", BindingFlags.Static | BindingFlags.NonPublic)
+			);
 
-		static MethodInfo getAllOverlapping => _getAllOverlapping ?? (_getAllOverlapping = sceneViewPickingClass.GetMethod("GetAllOverlapping", BindingFlags.Static | BindingFlags.NonPublic));
+		private static Type _sceneViewPickingClass;
 
-		static Type _sceneViewPickingClass;
+		private static Type SceneViewPickingClass => _sceneViewPickingClass ??
+		                                             (_sceneViewPickingClass =
+			                                             Type.GetType("UnityEditor.SceneViewPicking,UnityEditor"));
 
-		static Type sceneViewPickingClass => _sceneViewPickingClass ?? (_sceneViewPickingClass = Type.GetType("UnityEditor.SceneViewPicking,UnityEditor"));
+		#endregion
+		
+		#region Hierarchy Window Manipulation
 
+		private static Type _sceneHierarchyType;
+		private static Type SceneHierarchyType => _sceneHierarchyType ??
+		                                          (_sceneHierarchyType =
+			                                          Type.GetType("UnityEditor.SceneHierarchy,UnityEditor"));
+		private static Type _sceneHierarchyWindowType;
+		private static Type SceneHierarchyWindowType => _sceneHierarchyWindowType ??
+		                                                (_sceneHierarchyWindowType =
+			                                                Type.GetType(
+				                                                "UnityEditor.SceneHierarchyWindow,UnityEditor"));
+		private static Type _treeViewController;
+		private static Type TreeViewController => _treeViewController ?? (_treeViewController =
+			Type.GetType("UnityEditor.IMGUI.Controls.TreeViewController,UnityEditor"));
+		private static EditorWindow _hierarchyWindow;
+		public static EditorWindow HierarchyWindow =>
+			_hierarchyWindow == null ? _hierarchyWindow = GetHierarchyWindow() : _hierarchyWindow;
+
+		public static object SceneHierarchy => SceneHierarchyWindowType
+			.GetField("m_SceneHierarchy", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(HierarchyWindow);
+
+		/// <summary>
+		/// Sets the hierarchy's expanded state to <see cref="state"/>. <see cref="state"/> must be sorted.
+		/// </summary>
+		/// <param name="state">A list of ids representing items in the hierarchy.</param>
+		/// <param name="sceneHierarchy"><see cref="SceneHierarchy"/></param>
+		public static void SetHierarchyToState(List<int> state, object sceneHierarchy = null)
+		{
+			sceneHierarchy = sceneHierarchy ?? SceneHierarchy;
+			TreeViewState treeViewState = (TreeViewState)SceneHierarchyType
+				.GetProperty("treeViewState", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(sceneHierarchy);
+			treeViewState.expandedIDs = state;
+			// Reload the state data because otherwise the tree view does not actually collapse.
+			MethodInfo reloadDataMI = TreeViewController.GetMethod("ReloadData");
+			reloadDataMI.Invoke(
+				SceneHierarchyType.GetProperty("treeView", BindingFlags.NonPublic | BindingFlags.Instance)
+					.GetValue(sceneHierarchy), null);
+		}
+
+		private static EditorWindow GetHierarchyWindow()
+		{
+			Object[] findObjectsOfTypeAll = Resources.FindObjectsOfTypeAll(SceneHierarchyWindowType);
+			if (findObjectsOfTypeAll.Length > 0)
+				return (EditorWindow)findObjectsOfTypeAll[0];
+			return null;
+		}
+
+		/// <summary>
+		/// Gets the expanded state of the hierarchy window.
+		/// </summary>
+		/// <returns>IDs representing expanded hierarchy items.</returns>
+		public static int[] GetHierarchyExpandedState()
+		{
+			if (HierarchyWindow == null)
+				return null;
+			MethodInfo GetExpandedGameObjectsMI =
+				SceneHierarchyWindowType.GetMethod("GetExpandedIDs",
+					BindingFlags.NonPublic | BindingFlags.Instance);
+			return (int[])GetExpandedGameObjectsMI.Invoke(HierarchyWindow, null);
+		}
+
+		internal static void CollectHierarchyGameObjects(GameObject gameObject, HashSet<GameObject> result)
+		{
+			Transform t = gameObject.transform;
+			result.Add(gameObject);
+			while (t.parent != null)
+			{
+				t = t.parent;
+				if (!result.Add(t.gameObject))
+					return;
+			}
+		}
+
+		/// <summary>
+		/// Collapses everything in the hierarchy window except the current selection and any uncollapsed scenes.
+		/// </summary>
+		[Shortcut("Hierarchy View/Collapse Hierarchy")]
+		public static void CollapseHierarchy()
+		{
+			if (HierarchyWindow == null)
+				return;
+			object sceneHierarchy = SceneHierarchy;
+
+			int[] expandedState = GetHierarchyExpandedState();
+			List<int> newState = new List<int>();
+
+			// Collect selection and objects up to the root.
+			HashSet<GameObject> selection = new HashSet<GameObject>();
+			GameObject[] selectedGameObjects = Selection.gameObjects;
+			foreach (GameObject selected in selectedGameObjects)
+				CollectHierarchyGameObjects(selected, selection);
+
+			// Persist the selection in the state.
+			foreach (int i in expandedState)
+			{
+				Object o = HierarchyIdToObject(i, sceneHierarchy);
+				// Scenes come through as null. I could improve this to be more accurate, but I'm unsure whether there's a need.
+				// Will improve this if bugs are reported.
+				if (o == null || o is SceneAsset || selection.Contains(o))
+					newState.Add(i);
+			}
+
+			SetHierarchyToState(newState, sceneHierarchy);
+		}
+
+		/// <summary>
+		/// Collapses everything in the hierarchy window.
+		/// </summary>
+		[Shortcut("Hierarchy View/Collapse Hierarchy Completely")]
+		public static void CollapseHierarchyCompletely()
+		{
+			if (HierarchyWindow == null)
+				return;
+
+			SetHierarchyToState(new List<int>());
+		}
+
+		/// <summary>
+		/// Converts an ID returned by <see cref="GetHierarchyExpandedState"/> to an <see cref="Object"/>.
+		/// </summary>
+		/// <param name="id">An ID associated with the scene view hierarchy.</param>
+		/// <param name="sceneHierarchy"><see cref="SceneHierarchy"/> is passed manually to avoid repeated access in tight loops.</param>
+		/// <returns>The <see cref="Object"/> associated with the <see cref="id"/></returns>
+		public static Object HierarchyIdToObject(int id, object sceneHierarchy = null)
+		{
+			sceneHierarchy = sceneHierarchy ?? SceneHierarchy;
+			object controller =
+				SceneHierarchyType.GetProperty("treeView", BindingFlags.NonPublic | BindingFlags.Instance)
+					.GetValue(sceneHierarchy);
+			MethodInfo findItemMethod =
+				controller.GetType().GetMethod("FindItem", BindingFlags.Public | BindingFlags.Instance);
+			object result = findItemMethod.Invoke(controller, new object[] { id });
+			if (result == null)
+				return null;
+			PropertyInfo objectPptrProperty =
+				result.GetType().GetProperty("objectPPTR", BindingFlags.Public | BindingFlags.Instance);
+			return (Object)objectPptrProperty.GetValue(result);
+		}
 		#endregion
 	}
 
-	public class SelectionItem
+	internal class SelectionItem
 	{
 		public GameObject GameObject { get; }
 		public GUIContent[] Icons { get; }
+
 		public SelectionItem(GameObject gameObject, GUIContent[] icons)
 		{
 			GameObject = gameObject;
 			Icons = icons;
 		}
 	}
-	
-	public class SelectionPopup : EditorWindow
-	{
-		public static List<SelectionItem> totalSelection = new List<SelectionItem>();
-		private static float iconOffset;
-		private static float iconOffsetTarget;
-		private static int currentlyHoveringIndex;
 
-		public static float scrollPosition;
-		private static Vector2 originalPosition;
-		private const int maxIcons = 7;
+	internal class SelectionPopup : PopupWindowContent
+	{
+		public static List<SelectionItem> TotalSelection = new List<SelectionItem>();
+		private float _iconOffset;
+		private float _iconOffsetTarget;
+		private static int _currentlyHoveringIndex;
+
+		public static float ScrollPosition;
+		private Vector2 _originalPosition;
+		private bool _initialised;
+		private const int MaxIcons = 7;
 
 		#region Styling
 
-		private static Color boxBorderColor => new Color(0, 0, 0, 1);
+		private static Color BoxBorderColor => new Color(0, 0, 0, 1);
 
-		//Mini white label is used for highlighted content
+		// Mini white label is used for highlighted content.
 		private static GUIStyle _miniLabelWhite;
 
-		private static GUIStyle miniLabelWhite =>
+		private static GUIStyle MiniLabelWhite =>
 			_miniLabelWhite ?? (_miniLabelWhite = new GUIStyle(EditorStyles.miniLabel)
 			{
-				normal = {textColor = Color.white},
-				onNormal = {textColor = Color.white},
-				hover = {textColor = Color.white},
-				onHover = {textColor = Color.white},
-				active = {textColor = Color.white},
-				onActive = {textColor = Color.white},
+				normal = { textColor = Color.white },
+				onNormal = { textColor = Color.white },
+				hover = { textColor = Color.white },
+				onHover = { textColor = Color.white },
+				active = { textColor = Color.white },
+				onActive = { textColor = Color.white },
 			});
 
-		//We can't just use EditorStyles.miniLabel because it's not black in the pro-skin
+		// We can't just use EditorStyles.miniLabel because it's not black in the pro-skin.
 		private static GUIStyle _miniLabelBlack;
 
-		private static GUIStyle miniLabelBlack =>
+		private static GUIStyle MiniLabelBlack =>
 			_miniLabelBlack ?? (_miniLabelBlack = new GUIStyle(EditorStyles.miniLabel)
 			{
-				normal = {textColor = Color.black},
-				onNormal = {textColor = Color.black},
-				hover = {textColor = Color.black},
-				onHover = {textColor = Color.black},
-				active = {textColor = Color.black},
-				onActive = {textColor = Color.black},
+				normal = { textColor = Color.black },
+				onNormal = { textColor = Color.black },
+				hover = { textColor = Color.black },
+				onHover = { textColor = Color.black },
+				active = { textColor = Color.black },
+				onActive = { textColor = Color.black },
 			});
 
 		#endregion
 
-		public static SelectionPopup ShowModal(Rect r)
+		public SelectionPopup() => RefreshSelection();
+
+		public override void OnOpen()
 		{
-			if (totalSelection.Count == 0)
-				return null;
-			SelectionPopup popup = CreateInstance<SelectionPopup>();
-			popup.ShowAsDropDown(new Rect(r.position, Vector2.zero), r.size);
-			originalPosition = r.position;
-			return popup;
+			base.OnOpen();
+#if UNITY_2019_1_OR_NEWER
+			SceneView.duringSceneGui += CaptureEvents;
+#else
+			SceneView.onSceneGUIDelegate += CaptureEvents;
+#endif
+			_originalPosition = editorWindow.position.position;
+			editorWindow.wantsMouseMove = true;
 		}
 
-		private void OnEnable()
-		{
-			#if UNITY_2019_1_OR_NEWER
-			SceneView.duringSceneGui += CaptureEvents;
-			#else
-			SceneView.onSceneGUIDelegate += CaptureEvents;
-			#endif
-		}
+		public const float Width = 250f;
+		public const float Height = 16f;
+
+		public override Vector2 GetWindowSize() => new Vector2(Width, Height * TotalSelection.Count + 1 + 5 * 2);
 
 		private void CaptureEvents(SceneView sceneView)
 		{
@@ -234,144 +385,152 @@ namespace Vertx
 				case EventType.Layout:
 					return;
 				case EventType.ScrollWheel:
-					scrollDelta = Math.Sign(e.delta.y);
+					_scrollDelta = Math.Sign(e.delta.y);
 					break;
 			}
 
 			e.Use();
 		}
 
-		private void OnDisable()
+		public override void OnClose()
 		{
-			//Locks the scene view from receiving input for one more frame - which is enough to stop clicking off the UI from selecting a new object
+			base.OnClose();
+			// Locks the scene view from receiving input for one more frame - which is enough to stop clicking off the UI from selecting a new object.
 			EditorApplication.delayCall += () =>
 			{
-				#if UNITY_2019_1_OR_NEWER
+#if UNITY_2019_1_OR_NEWER
 				SceneView.duringSceneGui -= CaptureEvents;
-				#else
+#else
 				SceneView.onSceneGUIDelegate -= CaptureEvents;
-				#endif
+#endif
 			};
 		}
 
-		private int scrollDelta;
+		private int _scrollDelta;
+		private static readonly HashSet<GameObject> _currentSelection = new HashSet<GameObject>();
+		private int _lastHighlightedIndex = -1;
+		private bool _additionWasLastHeldForPreview;
 
-		private static readonly HashSet<GameObject> currentSelection = new HashSet<GameObject>();
-		private int lastIndexHighlighted = -1;
-		private bool shiftWasHeldForPreview;
-
-		void OnGUI()
+		public override void OnGUI(Rect position)
 		{
-			Event e = Event.current;
-			GUIUtility.hotControl = 0;
-
-			int indexCurrentlyHighlighted = -1;
-
-			//Scrolling behaviour
-			if (e.type == EventType.ScrollWheel)
-				scrollDelta = Math.Sign(e.delta.y);
-
-			if (scrollDelta != 0)
+			if (!_initialised)
 			{
-				scrollPosition += scrollDelta;
-				scrollPosition = Mathf.Clamp(scrollPosition, 0, totalSelection.Count - 1);
-				Rect tempRect = position;
-				tempRect.position = new Vector2(originalPosition.x, originalPosition.y - scrollPosition * NSelection.height);
-				ShowAsDropDown(new Rect(tempRect.position, Vector2.zero), tempRect.size);
-				scrollDelta = 0;
+				_originalPosition = editorWindow.position.position;
+				_initialised = true;
 			}
 
+			Event e = Event.current;
+			bool additive = e.control || e.command || e.shift;
 			
-			//Top and bottom borders (to fix a weird issue where the top 5 pixels of the window do not receive mouse events)
-			EditorGUI.DrawRect(new Rect(0, 0, NSelection.width, 5), GUI.color);
-			EditorGUI.DrawRect(new Rect(0, 6 + NSelection.height * totalSelection.Count, NSelection.width, 5), GUI.color);
-			
-			
-			Rect separatorTopRect = new Rect(0, 5, NSelection.width, 1);
-			EditorGUI.DrawRect(separatorTopRect, boxBorderColor);
+			GUIUtility.hotControl = 0;
 
-			for (var i = 0; i < totalSelection.Count; i++)
+			int highlightedIndex = -1;
+
+			// Scrolling behaviour.
+			if (e.type == EventType.ScrollWheel)
+				_scrollDelta = Math.Sign(e.delta.y);
+
+			if (_scrollDelta != 0)
 			{
-				SelectionItem selectionItem = totalSelection[i];
+				ScrollPosition += _scrollDelta;
+				ScrollPosition = Mathf.Clamp(ScrollPosition, 0, TotalSelection.Count - 1);
+				Rect tempRect = editorWindow.position;
+				tempRect.position = new Vector2(_originalPosition.x, _originalPosition.y - ScrollPosition * Height);
+				editorWindow.position = tempRect;
+				_scrollDelta = 0;
+			}
+
+			//Top and bottom borders (to fix a weird issue where the top 5 pixels of the window do not receive mouse events)
+			EditorGUI.DrawRect(new Rect(0, 0, Width, 5), GUI.color);
+			EditorGUI.DrawRect(new Rect(0, 6 + Height * TotalSelection.Count, Width, 5), GUI.color);
+
+			Rect separatorTopRect = new Rect(0, 5, Width, 1);
+			EditorGUI.DrawRect(separatorTopRect, BoxBorderColor);
+
+			for (var i = 0; i < TotalSelection.Count; i++)
+			{
+				SelectionItem selectionItem = TotalSelection[i];
 				GameObject gameObject = selectionItem.GameObject;
 				GUIContent[] icons = selectionItem.Icons;
 
-				Rect boxRect = new Rect(0, 5 + 1 + i * NSelection.height, NSelection.width, NSelection.height);
+				Rect boxRect = new Rect(0, 5 + 1 + i * Height, Width, Height);
 				GUIStyle labelStyle;
 
-				bool isInSelection = currentSelection.Contains(gameObject);
-				bool contains = boxRect.Contains(e.mousePosition);
-				if (contains)
-					indexCurrentlyHighlighted = i;
+				bool isInSelection = _currentSelection.Contains(gameObject);
+				bool containsMouse = boxRect.Contains(e.mousePosition);
+				if (containsMouse)
+					highlightedIndex = i;
 
-				EditorGUI.DrawRect(boxRect, boxBorderColor);
-
+				EditorGUI.DrawRect(boxRect, BoxBorderColor);
+				
 				if (isInSelection)
 				{
-					if (contains)
+					if (containsMouse)
 					{
-						//If we're not holding shift it will solely select this object
-						if (!e.shift)
-							GUI.color = new Color(0f, 0.5f, 1f);
-						else //Otherwise it will be a deselection
-							GUI.color = new Color(0.58f, 0.62f, 0.75f);
+						// If we're not holding it will solely select this object, otherwise it will be a deselection.
+						GUI.color = !additive
+							? new Color(0f, 0.5f, 1f)
+							: new Color(0.58f, 0.62f, 0.75f);
 					}
 					else
 					{
-						//If we're not holding shift and we're not hovering it will deselect these, so show that preview.
-						if (!e.shift)
-							GUI.color = new Color(0.58f, 0.62f, 0.75f);
-						else // Otherwise, we will be selecting additionally
-							GUI.color = new Color(0f, 0.5f, 1f);
+						// If we're not holding control and we're not hovering it will deselect these, so show that preview.
+						// Otherwise, we will be selecting additionally.
+						GUI.color = !additive
+							? new Color(0.58f, 0.62f, 0.75f)
+							: new Color(0f, 0.5f, 1f);
 					}
 
-					labelStyle = miniLabelWhite;
+					labelStyle = MiniLabelWhite;
 				}
 				else
 				{
-					if (contains) //Going To Select
+					if (containsMouse) // Going to select.
 					{
 						GUI.color = new Color(0f, 0.5f, 1f);
-						labelStyle = miniLabelWhite;
+						labelStyle = MiniLabelWhite;
 					}
-					else //Not In Selection
+					else // Not in selection.
 					{
 						GUI.color = Color.white;
-						labelStyle = miniLabelBlack;
+						labelStyle = MiniLabelBlack;
 					}
 				}
 
 				Rect innerBoxRect = new Rect(boxRect.x + 1, boxRect.y, boxRect.width - 2, boxRect.height - 1);
 				EditorGUI.DrawRect(innerBoxRect, GUI.color);
 				GUI.color = Color.white;
-				GUI.Label(new Rect(boxRect.x + 20, boxRect.y, NSelection.width - 20, boxRect.height), gameObject.name, labelStyle);
+				GUI.Label(new Rect(boxRect.x + 20, boxRect.y, Width - 20, boxRect.height), gameObject.name, labelStyle);
+
+				int maxLength = Mathf.Min(icons.Length, MaxIcons);
+				float width = Height * maxLength;
 
 				if (icons.Length > 0)
 				{
-					int maxLength = Mathf.Min(icons.Length, maxIcons);
-					float width = NSelection.height * maxLength;
-					Rect iconsRect = new Rect(boxRect.x + boxRect.width - maxLength * NSelection.height, boxRect.y, width, NSelection.height);
+					Rect iconsRect = new Rect(boxRect.x + boxRect.width - width, boxRect.y, width,
+						Height);
 
-					//Behaviour for scrolling icons when the cursor is over the selection (only if the icon count is greater than maxIcons)
-					if (contains && maxLength < icons.Length)
+					// Behaviour for scrolling icons when the cursor is over the selection (only if the icon count is greater than MaxIcons)
+					if (containsMouse && maxLength < icons.Length)
 					{
-						if (currentlyHoveringIndex != i)
+						if (_currentlyHoveringIndex != i)
 						{
-							currentlyHoveringIndex = i;
-							iconOffset = 0;
+							_currentlyHoveringIndex = i;
+							_iconOffset = 0;
 						}
-						
+
 						float max = icons.Length - maxLength;
-						iconOffset = Mathf.MoveTowards(iconOffset, iconOffsetTarget, (float) (EditorApplication.timeSinceStartup - lastTime));
-						if (iconOffset <= 0)
+						_iconOffset = Mathf.MoveTowards(_iconOffset, _iconOffsetTarget,
+							(float)(EditorApplication.timeSinceStartup - lastTime));
+						if (_iconOffset <= 0)
 						{
-							iconOffset = 0;
-							iconOffsetTarget = max;
+							_iconOffset = 0;
+							_iconOffsetTarget = max;
 						}
-						else if (iconOffset >= max)
+						else if (_iconOffset >= max)
 						{
-							iconOffset = max;
-							iconOffsetTarget = 0;
+							_iconOffset = max;
+							_iconOffsetTarget = 0;
 						}
 					}
 
@@ -380,34 +539,37 @@ namespace Vertx
 						for (var j = 0; j < icons.Length; j++)
 						{
 							GUIContent icon = icons[j];
-							GUI.Label(new Rect(width - (maxLength - j) * NSelection.height - iconOffset * NSelection.height, 0, NSelection.height, NSelection.height), icon);
+							GUI.Label(
+								new Rect(width - (maxLength - j) * Height - _iconOffset * Height, 0, Height, Height),
+								icon);
 						}
 					}
 				}
 
-				//If the selection is being hovered we may need to modify the currently previewing selection
-				//or if the shift key has changes states.
-				if (contains && (i != lastIndexHighlighted || shiftWasHeldForPreview != e.shift))
+				// If the selection is being hovered we may need to modify the currently previewing selection
+				// or if the control key has changes states.
+				if (containsMouse && (i != _lastHighlightedIndex || _additionWasLastHeldForPreview != additive))
 				{
-					ResetHierarchyToExpandedState();
-					lastIndexHighlighted = i;
-					if (!e.shift)
+					_lastHighlightedIndex = i;
+					if (!additive)
 					{
-						shiftWasHeldForPreview = false;
-						//If we're not selecting more (ie. have shift held) we should just set the selection to be the hovered item
-						Selection.objects = new Object[0];
+						_additionWasLastHeldForPreview = false;
+						ResetHierarchyToExpandedStateExcept(gameObject);
+						// If we're not selecting more (ie. have control held) we should just set the selection to be the hovered item.
+						Selection.objects = Array.Empty<Object>();
 						Selection.activeGameObject = gameObject;
 					}
 					else
 					{
-						shiftWasHeldForPreview = true;
-						//Otherwise we need to alter the current selection to add or remove the currently hovered selection
+						_additionWasLastHeldForPreview = true;
+						// Otherwise we need to alter the current selection to add or remove the currently hovered selection.
 						if (isInSelection)
 						{
-							//Remove the GameObject
-							Object[] newSelection = new Object[currentSelection.Count - 1];
+							ResetHierarchyToExpandedState();
+							// Remove the GameObject.
+							Object[] newSelection = new Object[_currentSelection.Count - 1];
 							int n = 0;
-							foreach (GameObject o in currentSelection)
+							foreach (GameObject o in _currentSelection)
 							{
 								if (o == gameObject) continue;
 								newSelection[n++] = o;
@@ -417,10 +579,11 @@ namespace Vertx
 						}
 						else
 						{
-							//Add the GameObject
-							Object[] newSelection = new Object[currentSelection.Count + 1];
+							ResetHierarchyToExpandedStateExcept(gameObject);
+							// Add the GameObject.
+							Object[] newSelection = new Object[_currentSelection.Count + 1];
 							int n = 0;
-							foreach (GameObject o in currentSelection)
+							foreach (GameObject o in _currentSelection)
 								newSelection[n++] = o;
 							newSelection[n] = gameObject;
 							Selection.objects = newSelection;
@@ -428,17 +591,17 @@ namespace Vertx
 					}
 				}
 
-				//Clicked in the box!
-				if (contains && e.isMouse && e.type == EventType.MouseUp)
+				// Clicked in the box!
+				if (containsMouse && e.isMouse && e.type == EventType.MouseUp)
 				{
-					MakeSelection(i, e.shift);
+					MakeSelection(i, additive);
 					e.Use();
-					if (!e.shift)
+					if (!additive)
 						break;
 				}
 			}
 
-			if (indexCurrentlyHighlighted == -1 && lastIndexHighlighted != -1)
+			if (highlightedIndex == -1 && _lastHighlightedIndex != -1)
 				RevertPreviewSelection();
 
 			if (e.isKey && e.type == EventType.KeyUp)
@@ -450,14 +613,14 @@ namespace Vertx
 						EndSelection();
 						break;
 					case KeyCode.Return:
-						if (indexCurrentlyHighlighted >= 0)
-							MakeSelection(indexCurrentlyHighlighted, e.shift);
+						if (highlightedIndex >= 0)
+							MakeSelection(highlightedIndex, additive);
 						break;
 				}
 			}
 			else if (e.isMouse && e.type == EventType.MouseUp)
 			{
-				if (indexCurrentlyHighlighted == -1)
+				if (highlightedIndex == -1)
 					RevertPreviewSelection();
 				EndSelection();
 			}
@@ -465,53 +628,49 @@ namespace Vertx
 			if (e.type != EventType.Repaint && e.type != EventType.Layout)
 				e.Use();
 
-			Focus();
-
-			Repaint();
-
 			lastTime = EditorApplication.timeSinceStartup;
 		}
 
 		private double lastTime;
 
-		void EndSelection()
+		private void EndSelection()
 		{
-			//Fix issues where the FPS controls are stuck on
+			// Fix issues where the FPS controls are stuck on.
 			Tools.viewTool = ViewTool.None;
 
-			scrollPosition = 0;
-			totalSelection.Clear();
-			currentSelection.Clear();
+			ScrollPosition = 0;
+			TotalSelection.Clear();
+			_currentSelection.Clear();
 			SceneView.RepaintAll();
-			Close();
+			editorWindow.Close();
 		}
 
 		/// <summary>
 		/// Reverts the currently active selection preview. The selection is visualised before selection, and this method removes the visualisation.
 		/// </summary>
-		void RevertPreviewSelection()
+		private void RevertPreviewSelection()
 		{
 			ResetHierarchyToExpandedState();
-			lastIndexHighlighted = -1;
-			//Revert to currentSelection
-			Object[] newSelection = new Object[currentSelection.Count];
+			_lastHighlightedIndex = -1;
+			//Revert to _currentSelection
+			Object[] newSelection = new Object[_currentSelection.Count];
 			int n = 0;
-			foreach (GameObject g in currentSelection)
+			foreach (GameObject g in _currentSelection)
 				newSelection[n++] = g;
 			Selection.objects = newSelection;
 		}
 
-		public static void RefreshSelection()
+		private static void RefreshSelection()
 		{
 			SetHierarchyExpandedState();
-			currentSelection.Clear();
-			currentSelection.UnionWith(Selection.gameObjects);
+			_currentSelection.Clear();
+			_currentSelection.UnionWith(Selection.gameObjects);
 		}
 
-		void MakeSelection(int index, bool isShift)
+		private void MakeSelection(int index, bool isShift)
 		{
-			GameObject gameObject = totalSelection[index].GameObject;
-			bool selectionContains = currentSelection.Contains(gameObject);
+			GameObject gameObject = TotalSelection[index].GameObject;
+			bool selectionContains = _currentSelection.Contains(gameObject);
 
 			if (isShift)
 			{
@@ -525,7 +684,7 @@ namespace Vertx
 			}
 			else
 			{
-				Selection.objects = new Object[0];
+				Selection.objects = Array.Empty<Object>();
 				Selection.activeGameObject = gameObject;
 			}
 
@@ -536,53 +695,50 @@ namespace Vertx
 			SceneView.RepaintAll();
 		}
 
-		#region Hierarchy Window Manipulation
+		private static int[] _allExpandedIDs;
 
-		private static Type _sceneHierarchyType;
-		private static Type sceneHierarchyType => _sceneHierarchyType ?? (_sceneHierarchyType = Type.GetType("UnityEditor.SceneHierarchy,UnityEditor"));
-		private static Type _sceneHierarchyWindowType;
-		private static Type sceneHierarchyWindowType => _sceneHierarchyWindowType ?? (_sceneHierarchyWindowType = Type.GetType("UnityEditor.SceneHierarchyWindow,UnityEditor"));
-		private static Type _treeViewController;
-		private static Type treeViewController => _treeViewController ?? (_treeViewController = Type.GetType("UnityEditor.IMGUI.Controls.TreeViewController,UnityEditor"));
-		private static EditorWindow _hierarchyWindow;
-		private static EditorWindow hierarchyWindow => _hierarchyWindow == null ? _hierarchyWindow = GetHierarchyWindow() : _hierarchyWindow;
-
-		private static int[] allExpandedIDs;
-
-		private static void SetHierarchyExpandedState()
-		{
-			allExpandedIDs = GetAllVisible();
-			
-			int[] GetAllVisible()
-			{
-				if (hierarchyWindow == null)
-					return null;
-				MethodInfo GetExpandedGameObjectsMI = sceneHierarchyWindowType.GetMethod("GetExpandedIDs", BindingFlags.NonPublic | BindingFlags.Instance);
-				return (int[]) GetExpandedGameObjectsMI.Invoke(hierarchyWindow, null);
-			}
-		}
+		private static void SetHierarchyExpandedState() => _allExpandedIDs = NSelection.GetHierarchyExpandedState();
 
 		private static void ResetHierarchyToExpandedState()
 		{
-			if (allExpandedIDs == null)
+			if (_allExpandedIDs == null)
 				return;
-			if (hierarchyWindow == null)
+
+			if (NSelection.HierarchyWindow == null)
 				return;
-			object sceneHierarchy = sceneHierarchyWindowType.GetField("m_SceneHierarchy", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(hierarchyWindow);
-			TreeViewState treeViewState = (TreeViewState) sceneHierarchyType.GetProperty("treeViewState", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(sceneHierarchy);
-			treeViewState.expandedIDs = new List<int>(allExpandedIDs);
-			//Reload the state data because otherwise the tree view does not actually collapse.
-			MethodInfo reloadDataMI = treeViewController.GetMethod("ReloadData");
-			reloadDataMI.Invoke(sceneHierarchyType.GetProperty("treeView", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(sceneHierarchy), null);
+
+			NSelection.SetHierarchyToState(new List<int>(_allExpandedIDs));
 		}
 
-		private static EditorWindow GetHierarchyWindow()
+		private static void ResetHierarchyToExpandedStateExcept(GameObject gameObject)
 		{
-			Object[] findObjectsOfTypeAll = Resources.FindObjectsOfTypeAll(sceneHierarchyWindowType);
-			if (findObjectsOfTypeAll.Length > 0)
-				return (EditorWindow) findObjectsOfTypeAll[0];
-			return null;
+			if (_allExpandedIDs == null)
+				return;
+
+			if (NSelection.HierarchyWindow == null)
+				return;
+
+			var newState = new List<int>(_allExpandedIDs);
+
+			HashSet<GameObject> selection = new HashSet<GameObject>();
+			NSelection.CollectHierarchyGameObjects(gameObject, selection);
+
+			object sceneHierarchy = NSelection.SceneHierarchy;
+			int[] expandedState = NSelection.GetHierarchyExpandedState();
+			// Persist the selection in the state.
+			foreach (int i in expandedState)
+			{
+				Object o = NSelection.HierarchyIdToObject(i, sceneHierarchy);
+				if (!selection.Contains(o))
+					continue;
+				if (!newState.Contains(i))
+					newState.Add(i);
+			}
+
+			// If unsorted, the hierarchy will break.
+			newState.Sort();
+
+			NSelection.SetHierarchyToState(newState);
 		}
-		#endregion
 	}
 }
