@@ -3,6 +3,8 @@ Simple selection for busy scenes in Unity
 
 **Unity 2018.3+**
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Z8Z42ZYHB)
+
 ----
 ## Usage:
 ### Scene view picking

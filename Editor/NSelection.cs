@@ -40,7 +40,7 @@ namespace Vertx
 		{
 			Event e = Event.current;
 
-			if (e.type == EventType.Used || !e.control || !e.isMouse || e.button != 1)
+			if (e.type == EventType.Used || !e.control || !e.isMouse || e.button != 1 || e.shift || e.alt)
 				return;
 
 			switch (e.rawType)
@@ -113,7 +113,7 @@ namespace Vertx
 
 			Vector2 selectionPosition = e.mousePosition;
 			float xOffset;
-			//Screen-rect limits offset
+			// Screen-rect limits offset.
 			if (selectionPosition.x + SelectionPopup.Width > sceneView.position.width)
 				xOffset = -SelectionPopup.Width;
 			else
@@ -178,13 +178,18 @@ namespace Vertx
 		public static object SceneHierarchy => SceneHierarchyWindowType
 			.GetField("m_SceneHierarchy", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(HierarchyWindow);
 
+		/// <summary>
+		/// Sets the hierarchy's expanded state to <see cref="state"/>. <see cref="state"/> must be sorted.
+		/// </summary>
+		/// <param name="state">A list of ids representing items in the hierarchy.</param>
+		/// <param name="sceneHierarchy"><see cref="SceneHierarchy"/></param>
 		public static void SetHierarchyToState(List<int> state, object sceneHierarchy = null)
 		{
 			sceneHierarchy = sceneHierarchy ?? SceneHierarchy;
 			TreeViewState treeViewState = (TreeViewState)SceneHierarchyType
 				.GetProperty("treeViewState", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(sceneHierarchy);
 			treeViewState.expandedIDs = state;
-			//Reload the state data because otherwise the tree view does not actually collapse.
+			// Reload the state data because otherwise the tree view does not actually collapse.
 			MethodInfo reloadDataMI = TreeViewController.GetMethod("ReloadData");
 			reloadDataMI.Invoke(
 				SceneHierarchyType.GetProperty("treeView", BindingFlags.NonPublic | BindingFlags.Instance)
@@ -199,6 +204,10 @@ namespace Vertx
 			return null;
 		}
 
+		/// <summary>
+		/// Gets the expanded state of the hierarchy window.
+		/// </summary>
+		/// <returns>IDs representing expanded hierarchy items.</returns>
 		public static int[] GetHierarchyExpandedState()
 		{
 			if (HierarchyWindow == null)
@@ -221,6 +230,9 @@ namespace Vertx
 			}
 		}
 
+		/// <summary>
+		/// Collapses everything in the hierarchy window except the current selection and any uncollapsed scenes.
+		/// </summary>
 		[Shortcut("Hierarchy View/Collapse Hierarchy")]
 		public static void CollapseHierarchy()
 		{
@@ -241,6 +253,8 @@ namespace Vertx
 			foreach (int i in expandedState)
 			{
 				Object o = HierarchyIdToObject(i, sceneHierarchy);
+				// Scenes come through as null. I could improve this to be more accurate, but I'm unsure whether there's a need.
+				// Will improve this if bugs are reported.
 				if (o == null || o is SceneAsset || selection.Contains(o))
 					newState.Add(i);
 			}
@@ -248,6 +262,9 @@ namespace Vertx
 			SetHierarchyToState(newState, sceneHierarchy);
 		}
 
+		/// <summary>
+		/// Collapses everything in the hierarchy window.
+		/// </summary>
 		[Shortcut("Hierarchy View/Collapse Hierarchy Completely")]
 		public static void CollapseHierarchyCompletely()
 		{
@@ -257,8 +274,15 @@ namespace Vertx
 			SetHierarchyToState(new List<int>());
 		}
 
-		public static Object HierarchyIdToObject(int id, object sceneHierarchy)
+		/// <summary>
+		/// Converts an ID returned by <see cref="GetHierarchyExpandedState"/> to an <see cref="Object"/>.
+		/// </summary>
+		/// <param name="id">An ID associated with the scene view hierarchy.</param>
+		/// <param name="sceneHierarchy"><see cref="SceneHierarchy"/> is passed manually to avoid repeated access in tight loops.</param>
+		/// <returns>The <see cref="Object"/> associated with the <see cref="id"/></returns>
+		public static Object HierarchyIdToObject(int id, object sceneHierarchy = null)
 		{
+			sceneHierarchy = sceneHierarchy ?? SceneHierarchy;
 			object controller =
 				SceneHierarchyType.GetProperty("treeView", BindingFlags.NonPublic | BindingFlags.Instance)
 					.GetValue(sceneHierarchy);
@@ -302,7 +326,7 @@ namespace Vertx
 
 		private static Color BoxBorderColor => new Color(0, 0, 0, 1);
 
-		//Mini white label is used for highlighted content
+		// Mini white label is used for highlighted content.
 		private static GUIStyle _miniLabelWhite;
 
 		private static GUIStyle MiniLabelWhite =>
@@ -316,7 +340,7 @@ namespace Vertx
 				onActive = { textColor = Color.white },
 			});
 
-		//We can't just use EditorStyles.miniLabel because it's not black in the pro-skin
+		// We can't just use EditorStyles.miniLabel because it's not black in the pro-skin.
 		private static GUIStyle _miniLabelBlack;
 
 		private static GUIStyle MiniLabelBlack =>
@@ -370,7 +394,7 @@ namespace Vertx
 		public override void OnClose()
 		{
 			base.OnClose();
-			//Locks the scene view from receiving input for one more frame - which is enough to stop clicking off the UI from selecting a new object
+			// Locks the scene view from receiving input for one more frame - which is enough to stop clicking off the UI from selecting a new object.
 			EditorApplication.delayCall += () =>
 			{
 #if UNITY_2019_1_OR_NEWER
@@ -382,10 +406,9 @@ namespace Vertx
 		}
 
 		private int _scrollDelta;
-
 		private static readonly HashSet<GameObject> _currentSelection = new HashSet<GameObject>();
-		private int _lastIndexHighlighted = -1;
-		private bool _additionWasHeldForPreview;
+		private int _lastHighlightedIndex = -1;
+		private bool _additionWasLastHeldForPreview;
 
 		public override void OnGUI(Rect position)
 		{
@@ -396,11 +419,13 @@ namespace Vertx
 			}
 
 			Event e = Event.current;
+			bool additive = e.control || e.command || e.shift;
+			
 			GUIUtility.hotControl = 0;
 
-			int indexCurrentlyHighlighted = -1;
+			int highlightedIndex = -1;
 
-			//Scrolling behaviour
+			// Scrolling behaviour.
 			if (e.type == EventType.ScrollWheel)
 				_scrollDelta = Math.Sign(e.delta.y);
 
@@ -431,18 +456,18 @@ namespace Vertx
 				GUIStyle labelStyle;
 
 				bool isInSelection = _currentSelection.Contains(gameObject);
-				bool contains = boxRect.Contains(e.mousePosition);
-				if (contains)
-					indexCurrentlyHighlighted = i;
+				bool containsMouse = boxRect.Contains(e.mousePosition);
+				if (containsMouse)
+					highlightedIndex = i;
 
 				EditorGUI.DrawRect(boxRect, BoxBorderColor);
-
+				
 				if (isInSelection)
 				{
-					if (contains)
+					if (containsMouse)
 					{
-						// If we're not holding control it will solely select this object, otherwise it will be a deselection.
-						GUI.color = !(e.control || e.command)
+						// If we're not holding it will solely select this object, otherwise it will be a deselection.
+						GUI.color = !additive
 							? new Color(0f, 0.5f, 1f)
 							: new Color(0.58f, 0.62f, 0.75f);
 					}
@@ -450,7 +475,7 @@ namespace Vertx
 					{
 						// If we're not holding control and we're not hovering it will deselect these, so show that preview.
 						// Otherwise, we will be selecting additionally.
-						GUI.color = !(e.control || e.command)
+						GUI.color = !(additive)
 							? new Color(0.58f, 0.62f, 0.75f)
 							: new Color(0f, 0.5f, 1f);
 					}
@@ -459,7 +484,7 @@ namespace Vertx
 				}
 				else
 				{
-					if (contains) // Going to select.
+					if (containsMouse) // Going to select.
 					{
 						GUI.color = new Color(0f, 0.5f, 1f);
 						labelStyle = MiniLabelWhite;
@@ -485,7 +510,7 @@ namespace Vertx
 						Height);
 
 					// Behaviour for scrolling icons when the cursor is over the selection (only if the icon count is greater than MaxIcons)
-					if (contains && maxLength < icons.Length)
+					if (containsMouse && maxLength < icons.Length)
 					{
 						if (_currentlyHoveringIndex != i)
 						{
@@ -522,12 +547,12 @@ namespace Vertx
 
 				// If the selection is being hovered we may need to modify the currently previewing selection
 				// or if the control key has changes states.
-				if (contains && (i != _lastIndexHighlighted || _additionWasHeldForPreview != (e.control || e.command)))
+				if (containsMouse && (i != _lastHighlightedIndex || _additionWasLastHeldForPreview != additive))
 				{
-					_lastIndexHighlighted = i;
-					if (!(e.control || e.command))
+					_lastHighlightedIndex = i;
+					if (!additive)
 					{
-						_additionWasHeldForPreview = false;
+						_additionWasLastHeldForPreview = false;
 						ResetHierarchyToExpandedStateExcept(gameObject);
 						// If we're not selecting more (ie. have control held) we should just set the selection to be the hovered item.
 						Selection.objects = Array.Empty<Object>();
@@ -536,11 +561,11 @@ namespace Vertx
 					else
 					{
 						ResetHierarchyToExpandedState();
-						_additionWasHeldForPreview = true;
+						_additionWasLastHeldForPreview = true;
 						// Otherwise we need to alter the current selection to add or remove the currently hovered selection.
 						if (isInSelection)
 						{
-							//Remove the GameObject
+							// Remove the GameObject.
 							Object[] newSelection = new Object[_currentSelection.Count - 1];
 							int n = 0;
 							foreach (GameObject o in _currentSelection)
@@ -553,7 +578,7 @@ namespace Vertx
 						}
 						else
 						{
-							//Add the GameObject
+							// Add the GameObject.
 							Object[] newSelection = new Object[_currentSelection.Count + 1];
 							int n = 0;
 							foreach (GameObject o in _currentSelection)
@@ -564,17 +589,17 @@ namespace Vertx
 					}
 				}
 
-				//Clicked in the box!
-				if (contains && e.isMouse && e.type == EventType.MouseUp)
+				// Clicked in the box!
+				if (containsMouse && e.isMouse && e.type == EventType.MouseUp)
 				{
-					MakeSelection(i, e.control || e.command);
+					MakeSelection(i, additive);
 					e.Use();
-					if (!(e.control || e.command))
+					if (!additive)
 						break;
 				}
 			}
 
-			if (indexCurrentlyHighlighted == -1 && _lastIndexHighlighted != -1)
+			if (highlightedIndex == -1 && _lastHighlightedIndex != -1)
 				RevertPreviewSelection();
 
 			if (e.isKey && e.type == EventType.KeyUp)
@@ -586,14 +611,14 @@ namespace Vertx
 						EndSelection();
 						break;
 					case KeyCode.Return:
-						if (indexCurrentlyHighlighted >= 0)
-							MakeSelection(indexCurrentlyHighlighted, e.control || e.command);
+						if (highlightedIndex >= 0)
+							MakeSelection(highlightedIndex, additive);
 						break;
 				}
 			}
 			else if (e.isMouse && e.type == EventType.MouseUp)
 			{
-				if (indexCurrentlyHighlighted == -1)
+				if (highlightedIndex == -1)
 					RevertPreviewSelection();
 				EndSelection();
 			}
@@ -612,7 +637,7 @@ namespace Vertx
 
 		private void EndSelection()
 		{
-			//Fix issues where the FPS controls are stuck on
+			// Fix issues where the FPS controls are stuck on.
 			Tools.viewTool = ViewTool.None;
 
 			ScrollPosition = 0;
@@ -628,7 +653,7 @@ namespace Vertx
 		private void RevertPreviewSelection()
 		{
 			ResetHierarchyToExpandedState();
-			_lastIndexHighlighted = -1;
+			_lastHighlightedIndex = -1;
 			//Revert to _currentSelection
 			Object[] newSelection = new Object[_currentSelection.Count];
 			int n = 0;
