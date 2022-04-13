@@ -3,19 +3,26 @@ Simple selection for busy scenes in Unity
 
 **Unity 2018.3+**
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Z8Z42ZYHB)
+
 ----
 ## Usage:
-**Ctrl + Right-Mouse** to activate.
-
-Hold **Shift** during selection to select multiple objects.
-
-Press **Escape** or **click** outside the selection list to end the current selection.
+### Scene view picking
+<kbd>Ctrl</kbd> **- right-mouse** to activate.  
+Hold <kbd>Ctrl</kbd> during selection to select multiple objects.  
+Press <kbd>Escape</kbd> or **click** outside the selection list to end the current selection.  
 
 ![gif](http://vertx.xyz/Images/NSelection/nSelection4.gif)
 
-1.0.2 adds drag and drop between inspectors! Wow!
-
+### Drag and drop between tabs
 ![gif](http://vertx.xyz/Images/NSelection/nSelectionDragging.gif)
+
+### Collapse Hierarchy
+Assign the Collapse Hierarchy shortcuts in the Shortcut Manager (**Edit/Shortcuts/Hierarchy View**).  
+- **Collapse Hierarchy** will collapse anything but expanded Scenes and the selection.
+- **Collapse Hierarchy Completely** will collapse everything.
+
+I am using <kbd>Ctrl+Backspace</kbd> personally!
 
 ## Installation
 
