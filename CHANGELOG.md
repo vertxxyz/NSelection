@@ -4,6 +4,16 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2022-04-17
+- Added Focus hierarchy to selection. This is likely more useful than Collapse Hierarchy. It supports:
+  - Hierarchy view
+  - Project browser
+  - Profiler window
+  - Timeline window
+  - Animation window
+  - UIToolkit debugger
+- Fixed Collapse Hierarchy to properly collapse selected element.
+
 ## [1.1.0] - 2022-04-13
 - Added unbound shortcuts for collapsing the hierarchy, (I recommend binding to Ctrl-Backspace).
   - Collapse Hierarchy will collapse anything but expanded Scenes and the selection.

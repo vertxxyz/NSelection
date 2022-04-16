@@ -17,12 +17,21 @@ Press <kbd>Escape</kbd> or **click** outside the selection list to end the curre
 ### Drag and drop between tabs
 ![gif](http://vertx.xyz/Images/NSelection/nSelectionDragging.gif)
 
+### Focus hierarchy to selection
+<kbd>Alt+Shift+F</kbd> sets the hierarchy's expanded state to only contain the current selection.  
+You can rebind this in the Shortcut Manager (**Edit/Shortcuts/Window**).  
+The supported windows are:
+- **Hierarchy view**
+- **Project browser**
+- **Profiler window**
+- **Timeline window**
+- **Animation window**
+- **UIToolkit debugger**
+
 ### Collapse Hierarchy
 Assign the Collapse Hierarchy shortcuts in the Shortcut Manager (**Edit/Shortcuts/Hierarchy View**).  
 - **Collapse Hierarchy** will collapse anything but expanded Scenes and the selection.
 - **Collapse Hierarchy Completely** will collapse everything.
-
-I am using <kbd>Ctrl+Backspace</kbd> personally!
 
 ## Installation
 
