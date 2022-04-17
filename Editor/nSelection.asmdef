@@ -1,6 +1,5 @@
 {
     "name": "nSelection",
-    "rootNamespace": "",
     "references": [
         "GUID:2bafac87e7f4b9b418d9448d219b01ab",
         "GUID:f06555f75b070af458a003d92f9efb00",
@@ -25,6 +24,11 @@
             "name": "com.unity.timeline",
             "expression": "0.0",
             "define": "UNITY_TIMELINE"
+        },
+        {
+            "name": "com.unity.timeline",
+            "expression": "1.5.2",
+            "define": "UNITY_TIMELINE_1_5_2"
         }
     ],
     "noEngineReferences": false

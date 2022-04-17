@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Unity.Profiling.Editor;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEditor.ShortcutManagement;
@@ -77,11 +76,11 @@ namespace Vertx
 						return;
 					case "UnityEditor.ProfilerWindow":
 						// Focus profiler window.
-						FocusProfilerWindowToSelection((ProfilerWindow)focusedWindow);
+						FocusProfilerWindowToSelection(focusedWindow);
 						return;
 					case "UnityEditor.AnimationWindow":
 						// Focus animation window.
-						FocusAnimationWindowToSelection((AnimationWindow)focusedWindow);
+						FocusAnimationWindowToSelection(focusedWindow);
 						return;
 #if UNITY_TIMELINE
 					case "UnityEditor.Timeline.TimelineWindow":
@@ -120,11 +119,12 @@ namespace Vertx
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
-		public static void FocusProfilerWindowToSelection(ProfilerWindow profilerWindow)
+		public static void FocusProfilerWindowToSelection(EditorWindow profilerWindow)
 		{
 			var interfaceType = Type.GetType("UnityEditorInternal.IProfilerWindowController,UnityEditor");
 			PropertyInfo selectedModuleProperty = interfaceType.GetProperty("selectedModule", PublicInstance);
-			ProfilerModule module = (ProfilerModule)selectedModuleProperty.GetValue(profilerWindow);
+
+			var module = selectedModuleProperty.GetValue(profilerWindow); // ProfilerModule
 
 			// CPUOrGPUProfilerModule.FrameDataHierarchyView
 			PropertyInfo frameDataHierarchyViewProperty = module.GetType()
@@ -150,7 +150,7 @@ namespace Vertx
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
-		public static void FocusAnimationWindowToSelection(AnimationWindow animationWindow)
+		public static void FocusAnimationWindowToSelection(EditorWindow animationWindow)
 		{
 			object animEditor = animationWindow.GetType().GetProperty("animEditor", NonPublicInstance)
 				.GetValue(animationWindow);
@@ -158,8 +158,7 @@ namespace Vertx
 				animEditor.GetType().GetField("m_Hierarchy", NonPublicInstance).GetValue(animEditor);
 			FocusGenericHierarchyWithField(
 				animationWindowHierarchy,
-				"m_TreeView",
-				method: HierarchyFocusMethod.SetExpandedIds
+				"m_TreeView"
 			);
 			// TODO include expanding properties that contain selected keys.
 		}
@@ -174,10 +173,17 @@ namespace Vertx
 			object treeViewContainer = debuggerImpl.GetType().GetField("m_TreeViewContainer", NonPublicInstance)
 				.GetValue(debuggerImpl);
 			Type treeViewContainerType = treeViewContainer.GetType();
+#if UNITY_2022_1_OR_NEWER
 			var treeView = (UIToolkit.TreeView)treeViewContainerType.GetField("m_TreeView", NonPublicInstance)
 				.GetValue(treeViewContainer);
 
 			treeView.CollapseAll();
+#else
+			var treeView = treeViewContainerType.GetField("m_TreeView", NonPublicInstance)
+				.GetValue(treeViewContainer);
+
+			treeView.GetType().GetMethod("CollapseAll", PublicInstance).Invoke(treeView, null);
+#endif
 
 			var debuggerSelection = treeViewContainerType.GetField("m_DebuggerSelection", NonPublicInstance)
 				.GetValue(treeViewContainer);
@@ -192,14 +198,9 @@ namespace Vertx
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
-		public static void FocusFrameDebugger(EditorWindow uitoolkitDebugger)
-		{
+		public static void FocusFrameDebugger(EditorWindow frameDebugger) =>
 			FocusGenericHierarchyWithField(
-				uitoolkitDebugger.GetType().GetField("m_TreeView", NonPublicInstance).GetValue(uitoolkitDebugger),
-				"m_TreeView",
-				method: HierarchyFocusMethod.SetExpandedIds
-			);
-			uitoolkitDebugger.Repaint();
-		}
+				frameDebugger.GetType().GetField("m_TreeView", NonPublicInstance).GetValue(frameDebugger),
+				"m_TreeView");
 	}
 }

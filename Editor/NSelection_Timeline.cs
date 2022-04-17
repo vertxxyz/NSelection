@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.Timeline;
-using UnityEngine;
 using UnityEngine.Timeline;
+using Object = UnityEngine.Object;
+
 // ReSharper disable UseNegatedPatternInIsExpression
 
 #if UNITY_TIMELINE
@@ -18,11 +21,18 @@ namespace Vertx
 			TimelineAsset asset = TimelineEditor.inspectedAsset;
 			if (asset == null)
 				return;
-			
+
 			TimelineClip[] selectedClips = TimelineEditor.selectedClips;
 			HashSet<TrackAsset> selectedTracks = new HashSet<TrackAsset>();
 			foreach (TimelineClip clip in selectedClips)
+			{
+#if UNITY_TIMELINE_1_5_2
 				selectedTracks.Add(clip.GetParentTrack());
+#else
+				selectedTracks.Add(clip.parentTrack);
+#endif
+			}
+
 			Object[] selectedObjects = Selection.objects;
 			foreach (Object o in selectedObjects)
 			{
@@ -35,7 +45,12 @@ namespace Vertx
 				CollectParents(track, parents);
 			SetExpandedStates(asset, parents);
 
-			TimelineEditorWindow window = TimelineEditor.GetWindow();
+#if UNITY_TIMELINE_1_5_2
+			EditorWindow window = TimelineEditor.GetWindow();
+#else
+			EditorWindow window =
+				(EditorWindow)typeof(TimelineEditor).GetProperty("window", NonPublicStatic).GetValue(null);
+#endif
 			object treeView = window.GetType().GetProperty("treeView", PublicInstance).GetValue(window);
 			treeView.GetType().GetMethod("Reload", PublicInstance).Invoke(treeView, null);
 		}
@@ -55,10 +70,29 @@ namespace Vertx
 			foreach (TrackAsset track in asset.GetRootTracks())
 				SetExpandedStates(track, expanded);
 		}
-		
+
+#if !UNITY_TIMELINE_1_5_2
+		private static MethodInfo _setTrackCollapsed;
+
+		private static MethodInfo setTrackCollapsed
+			=> _setTrackCollapsed ??
+			   (
+				   _setTrackCollapsed =
+					   Type.GetType("UnityEditor.Timeline.TimelineWindowViewPrefs,Unity.Timeline.Editor")
+						   .GetMethod("SetTrackCollapsed", PublicStatic)
+			   );
+
+		private static void SetTrackCollapsed(TrackAsset track, bool collapsed) =>
+			setTrackCollapsed.Invoke(null, new object[] { track, collapsed });
+#endif
+
 		private static void SetExpandedStates(TrackAsset asset, HashSet<TrackAsset> expanded)
 		{
+#if UNITY_TIMELINE_1_5_2
 			asset.SetCollapsed(!expanded.Contains(asset));
+#else
+			SetTrackCollapsed(asset, !expanded.Contains(asset));
+#endif
 			foreach (TrackAsset track in asset.GetChildTracks())
 				SetExpandedStates(track, expanded);
 		}

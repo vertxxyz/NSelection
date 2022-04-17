@@ -194,67 +194,30 @@ namespace Vertx
 				SceneHierarchyType.GetProperty("treeView", NonPublicInstance)
 					.GetValue(sceneHierarchy), null);
 		}
-
-		private enum HierarchyFocusMethod
-		{
-			SetSelection, SetExpandedIds
-		}
 		
 		private static void FocusGenericHierarchyWithProperty(object stateParent,
 			string treeViewPropertyName,
-			BindingFlags flags = NonPublicInstance,
-			HierarchyFocusMethod method = HierarchyFocusMethod.SetSelection)
+			BindingFlags flags = NonPublicInstance)
 		{
 			Type windowType = stateParent.GetType();
 			object treeView = windowType
 				.GetProperty(treeViewPropertyName, flags)
 				.GetValue(stateParent);
-			FocusGenericHierarchy(treeView, method);
+			FocusGenericHierarchy(treeView);
 		}
 
 		private static void FocusGenericHierarchyWithField(object window,
 			string treeViewFieldName,
-			BindingFlags flags = NonPublicInstance,
-			HierarchyFocusMethod method = HierarchyFocusMethod.SetSelection)
+			BindingFlags flags = NonPublicInstance)
 		{
 			Type windowType = window.GetType();
 			object treeView = windowType
 				.GetField(treeViewFieldName, flags)
 				.GetValue(window);
-			FocusGenericHierarchy(treeView, method);
-		}
-
-		private static void FocusGenericHierarchy(object treeView, HierarchyFocusMethod method)
-		{
-			switch (method)
-			{
-				case HierarchyFocusMethod.SetSelection:
-					FocusGenericHierarchy(treeView);
-					break;
-				case HierarchyFocusMethod.SetExpandedIds:
-					FocusGenericHierarchyAlternate(treeView);
-					break;
-				default:
-					throw new ArgumentOutOfRangeException(nameof(method), method, null);
-			}
-		}
-
-		private static void FocusGenericHierarchy(object treeView)
-		{
-			TreeViewState treeViewState = (TreeViewState)TreeViewController
-				.GetProperty("state", PublicInstance)
-				.GetValue(treeView);
-			treeViewState.expandedIDs = new List<int>();
-			MethodInfo setSelection = TreeViewController.GetMethod(
-				"SetSelection",
-				PublicInstance, null,
-				new Type[] { typeof(int[]), typeof(bool), typeof(bool) }, null
-			);
-			setSelection.Invoke(treeView, new object[] { treeViewState.selectedIDs.ToArray(), true, false });
-			TreeViewController.GetMethod("ReloadData").Invoke(treeView, null);
+			FocusGenericHierarchy(treeView);
 		}
 		
-		private static void FocusGenericHierarchyAlternate(object treeView)
+		private static void FocusGenericHierarchy(object treeView)
 		{
 			TreeViewState treeViewState = (TreeViewState)TreeViewController
 				.GetProperty("state", PublicInstance)
