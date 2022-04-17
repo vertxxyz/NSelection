@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
@@ -28,6 +29,10 @@ namespace Vertx
 #endif
 		}
 
+		private const BindingFlags NonPublicInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+		private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
+		private const BindingFlags NonPublicStatic = BindingFlags.Static | BindingFlags.NonPublic;
+		private const BindingFlags PublicStatic = BindingFlags.Static | BindingFlags.Public;
 		private static bool _mouseRightIsDownWithoutDrag;
 
 		private static void OnSceneGUI(SceneView sceneView)
@@ -140,7 +145,7 @@ namespace Vertx
 		private static readonly Func<Vector2, IEnumerable<GameObject>> _getAllOverlapping =
 			(Func<Vector2, IEnumerable<GameObject>>)Delegate.CreateDelegate(
 				typeof(Func<Vector2, IEnumerable<GameObject>>),
-				SceneViewPickingClass.GetMethod("GetAllOverlapping", BindingFlags.Static | BindingFlags.NonPublic)
+				SceneViewPickingClass.GetMethod("GetAllOverlapping", NonPublicStatic)
 			);
 
 		private static Type _sceneViewPickingClass;
@@ -170,7 +175,7 @@ namespace Vertx
 			_hierarchyWindow == null ? _hierarchyWindow = GetHierarchyWindow() : _hierarchyWindow;
 
 		public static object SceneHierarchy => SceneHierarchyWindowType
-			.GetField("m_SceneHierarchy", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(HierarchyWindow);
+			.GetField("m_SceneHierarchy", NonPublicInstance).GetValue(HierarchyWindow);
 
 		/// <summary>
 		/// Sets the hierarchy's expanded state to <see cref="state"/>. <see cref="state"/> must be sorted.
@@ -181,56 +186,106 @@ namespace Vertx
 		{
 			sceneHierarchy = sceneHierarchy ?? SceneHierarchy;
 			TreeViewState treeViewState = (TreeViewState)SceneHierarchyType
-				.GetProperty("treeViewState", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(sceneHierarchy);
+				.GetProperty("treeViewState", NonPublicInstance).GetValue(sceneHierarchy);
 			treeViewState.expandedIDs = state;
 			// Reload the state data because otherwise the tree view does not actually collapse.
 			MethodInfo reloadDataMI = TreeViewController.GetMethod("ReloadData");
 			reloadDataMI.Invoke(
-				SceneHierarchyType.GetProperty("treeView", BindingFlags.NonPublic | BindingFlags.Instance)
+				SceneHierarchyType.GetProperty("treeView", NonPublicInstance)
 					.GetValue(sceneHierarchy), null);
 		}
 
-		private static (object treeView, TreeViewState state) FocusGenericHierarchyWithProperty(
-			object stateParent,
+		private enum HierarchyFocusMethod
+		{
+			SetSelection, SetExpandedIds
+		}
+		
+		private static void FocusGenericHierarchyWithProperty(object stateParent,
 			string treeViewPropertyName,
-			BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Instance
-		)
+			BindingFlags flags = NonPublicInstance,
+			HierarchyFocusMethod method = HierarchyFocusMethod.SetSelection)
 		{
 			Type windowType = stateParent.GetType();
 			object treeView = windowType
 				.GetProperty(treeViewPropertyName, flags)
 				.GetValue(stateParent);
-			return (treeView, FocusGenericHierarchy(treeView));
+			FocusGenericHierarchy(treeView, method);
 		}
 
-		private static (object treeView, TreeViewState state) FocusGenericHierarchyWithField(
-			object window,
+		private static void FocusGenericHierarchyWithField(object window,
 			string treeViewFieldName,
-			BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Instance
-		)
+			BindingFlags flags = NonPublicInstance,
+			HierarchyFocusMethod method = HierarchyFocusMethod.SetSelection)
 		{
 			Type windowType = window.GetType();
 			object treeView = windowType
 				.GetField(treeViewFieldName, flags)
 				.GetValue(window);
-			return (treeView, FocusGenericHierarchy(treeView));
+			FocusGenericHierarchy(treeView, method);
 		}
 
-		private static TreeViewState FocusGenericHierarchy(object treeView)
+		private static void FocusGenericHierarchy(object treeView, HierarchyFocusMethod method)
+		{
+			switch (method)
+			{
+				case HierarchyFocusMethod.SetSelection:
+					FocusGenericHierarchy(treeView);
+					break;
+				case HierarchyFocusMethod.SetExpandedIds:
+					FocusGenericHierarchyAlternate(treeView);
+					break;
+				default:
+					throw new ArgumentOutOfRangeException(nameof(method), method, null);
+			}
+		}
+
+		private static void FocusGenericHierarchy(object treeView)
 		{
 			TreeViewState treeViewState = (TreeViewState)TreeViewController
-				.GetProperty("state", BindingFlags.Public | BindingFlags.Instance)
+				.GetProperty("state", PublicInstance)
 				.GetValue(treeView);
 			treeViewState.expandedIDs = new List<int>();
 			MethodInfo setSelection = TreeViewController.GetMethod(
 				"SetSelection",
-				BindingFlags.Public | BindingFlags.Instance, null,
+				PublicInstance, null,
 				new Type[] { typeof(int[]), typeof(bool), typeof(bool) }, null
 			);
-			setSelection.Invoke(treeView, new object[] {  treeViewState.selectedIDs.ToArray(), true, false });
+			setSelection.Invoke(treeView, new object[] { treeViewState.selectedIDs.ToArray(), true, false });
 			TreeViewController.GetMethod("ReloadData").Invoke(treeView, null);
-			return treeViewState;
 		}
+		
+		private static void FocusGenericHierarchyAlternate(object treeView)
+		{
+			TreeViewState treeViewState = (TreeViewState)TreeViewController
+				.GetProperty("state", PublicInstance)
+				.GetValue(treeView);
+			treeViewState.expandedIDs = new List<int>();
+
+			object data = TreeViewController.GetProperty("data", PublicInstance).GetValue(treeView);
+			Type dataSourceType = data.GetType();
+			MethodInfo findItem = dataSourceType.GetMethod("FindItem", PublicInstance);
+			
+
+			HashSet<int> expandedSet = new HashSet<int>();
+			object[] args1 = new object[1];
+			foreach (int i in treeViewState.selectedIDs)
+			{
+				args1[0] = i;
+				TreeViewItem item = (TreeViewItem)findItem.Invoke(data, args1);
+				if (item == null)
+					continue;
+				TreeViewItem parent = item.parent;
+				while (parent != null)
+				{
+					expandedSet.Add(parent.id);
+					parent = parent.parent;
+				}
+			}
+
+			args1[0] = expandedSet.ToArray();
+			dataSourceType.GetMethod("SetExpandedIDs", PublicInstance).Invoke(data, args1);
+		}
+
 
 		private static EditorWindow GetHierarchyWindow()
 		{
@@ -250,7 +305,7 @@ namespace Vertx
 				return null;
 			MethodInfo GetExpandedGameObjectsMI =
 				SceneHierarchyWindowType.GetMethod("GetExpandedIDs",
-					BindingFlags.NonPublic | BindingFlags.Instance);
+					NonPublicInstance);
 			return (int[])GetExpandedGameObjectsMI.Invoke(HierarchyWindow, null);
 		}
 
@@ -275,15 +330,15 @@ namespace Vertx
 		{
 			sceneHierarchy = sceneHierarchy ?? SceneHierarchy;
 			object controller =
-				SceneHierarchyType.GetProperty("treeView", BindingFlags.NonPublic | BindingFlags.Instance)
+				SceneHierarchyType.GetProperty("treeView", NonPublicInstance)
 					.GetValue(sceneHierarchy);
 			MethodInfo findItemMethod =
-				controller.GetType().GetMethod("FindItem", BindingFlags.Public | BindingFlags.Instance);
+				controller.GetType().GetMethod("FindItem", PublicInstance);
 			object result = findItemMethod.Invoke(controller, new object[] { id });
 			if (result == null)
 				return null;
 			PropertyInfo objectPptrProperty =
-				result.GetType().GetProperty("objectPPTR", BindingFlags.Public | BindingFlags.Instance);
+				result.GetType().GetProperty("objectPPTR", PublicInstance);
 			return (Object)objectPptrProperty.GetValue(result);
 		}
 

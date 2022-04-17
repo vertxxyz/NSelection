@@ -93,6 +93,9 @@ namespace Vertx
 						// Focus UIToolkit debugger
 						FocusUIToolkitDebugger(focusedWindow);
 						return;
+					case "UnityEditor.FrameDebuggerWindow":
+						FocusFrameDebugger(focusedWindow);
+						return;
 				}
 
 				// Debug.Log(focusedWindowTypeName);
@@ -113,24 +116,25 @@ namespace Vertx
 			object sceneHierarchy = SceneHierarchy;
 			FocusGenericHierarchyWithProperty(sceneHierarchy, "treeView");
 		}
-		
+
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
 		public static void FocusProfilerWindowToSelection(ProfilerWindow profilerWindow)
 		{
 			var interfaceType = Type.GetType("UnityEditorInternal.IProfilerWindowController,UnityEditor");
-			PropertyInfo selectedModuleProperty = interfaceType.GetProperty("selectedModule", BindingFlags.Public | BindingFlags.Instance);
+			PropertyInfo selectedModuleProperty = interfaceType.GetProperty("selectedModule", PublicInstance);
 			ProfilerModule module = (ProfilerModule)selectedModuleProperty.GetValue(profilerWindow);
-			
+
 			// CPUOrGPUProfilerModule.FrameDataHierarchyView
 			PropertyInfo frameDataHierarchyViewProperty = module.GetType()
-				.GetProperty("FrameDataHierarchyView", BindingFlags.NonPublic | BindingFlags.Instance);
+				.GetProperty("FrameDataHierarchyView", NonPublicInstance);
 			if (frameDataHierarchyViewProperty != null)
 			{
 				// ProfilerFrameDataHierarchyView
 				object frameDataHierarchyView = frameDataHierarchyViewProperty.GetValue(module);
-				TreeView treeView = (TreeView)frameDataHierarchyView.GetType().GetProperty("treeView", BindingFlags.Public | BindingFlags.Instance).GetValue(frameDataHierarchyView);
+				TreeView treeView = (TreeView)frameDataHierarchyView.GetType().GetProperty("treeView", PublicInstance)
+					.GetValue(frameDataHierarchyView);
 				treeView.state.expandedIDs = new List<int>();
 				treeView.SetSelection(treeView.state.selectedIDs, TreeViewSelectionOptions.RevealAndFrame);
 				treeView.Reload();
@@ -140,56 +144,62 @@ namespace Vertx
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
-		public static void FocusProjectBrowserToSelection(EditorWindow projectBrowser) => FocusGenericHierarchyWithField(projectBrowser, "m_FolderTree");
-		
+		public static void FocusProjectBrowserToSelection(EditorWindow projectBrowser) =>
+			FocusGenericHierarchyWithField(projectBrowser, "m_FolderTree");
+
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
 		public static void FocusAnimationWindowToSelection(AnimationWindow animationWindow)
 		{
-			object animEditor = animationWindow.GetType().GetProperty("animEditor", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(animationWindow);
-			object animationWindowHierarchy = animEditor.GetType().GetField("m_Hierarchy", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(animEditor);
-			FocusGenericHierarchyWithField(animationWindowHierarchy, "m_TreeView");
-			
-			// TODO make this not have to be a toggle, it's annoying broken right now.
+			object animEditor = animationWindow.GetType().GetProperty("animEditor", NonPublicInstance)
+				.GetValue(animationWindow);
+			object animationWindowHierarchy =
+				animEditor.GetType().GetField("m_Hierarchy", NonPublicInstance).GetValue(animEditor);
+			FocusGenericHierarchyWithField(
+				animationWindowHierarchy,
+				"m_TreeView",
+				method: HierarchyFocusMethod.SetExpandedIds
+			);
+			// TODO include expanding properties that contain selected keys.
 		}
-		
+
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
 		public static void FocusUIToolkitDebugger(EditorWindow uitoolkitDebugger)
 		{
-			object debuggerImpl = uitoolkitDebugger.GetType().GetProperty("debuggerImpl", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(uitoolkitDebugger);
-			object treeViewContainer = debuggerImpl.GetType().GetField("m_TreeViewContainer", BindingFlags.NonPublic | BindingFlags.Instance)
+			object debuggerImpl = uitoolkitDebugger.GetType().GetProperty("debuggerImpl", NonPublicInstance)
+				.GetValue(uitoolkitDebugger);
+			object treeViewContainer = debuggerImpl.GetType().GetField("m_TreeViewContainer", NonPublicInstance)
 				.GetValue(debuggerImpl);
-			var treeView = (UIToolkit.TreeView)treeViewContainer.GetType().GetField("m_TreeView", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(treeViewContainer);
-			HashSet<int> parents = new HashSet<int>();
-			foreach (int selectedIndex in treeView.selectedIndices)
-			{
-				int parentId = treeView.GetParentIdForIndex(selectedIndex);
-				if (parentId >= 0)
-					CollectParents(treeView.viewController, parentId, parents);
-			}
+			Type treeViewContainerType = treeViewContainer.GetType();
+			var treeView = (UIToolkit.TreeView)treeViewContainerType.GetField("m_TreeView", NonPublicInstance)
+				.GetValue(treeViewContainer);
 
 			treeView.CollapseAll();
-			Debug.Log(parents.Count);
-			foreach (int parent in parents)
-				treeView.ExpandItem(parent);
-			treeView.Rebuild();
-			
-			// TODO support expanding to see selection.
+
+			var debuggerSelection = treeViewContainerType.GetField("m_DebuggerSelection", NonPublicInstance)
+				.GetValue(treeViewContainer);
+
+			Type debuggerSelectionType = debuggerSelection.GetType();
+			PropertyInfo selectedElement = debuggerSelectionType.GetProperty("element", PublicInstance);
+			object selection = selectedElement.GetValue(debuggerSelection);
+			debuggerSelectionType.GetField("m_Element", NonPublicInstance).SetValue(debuggerSelection, null);
+			selectedElement.SetValue(debuggerSelection, selection);
 		}
 
-		private static void CollectParents(UIToolkit.TreeViewController viewController, int id, HashSet<int> parents)
+		/// <summary>
+		/// Sets the hierarchy's expanded state to only contain the current selection.
+		/// </summary>
+		public static void FocusFrameDebugger(EditorWindow uitoolkitDebugger)
 		{
-			while (true)
-			{
-				if (!parents.Add(id))
-					return;
-				id = viewController.GetParentId(id);
-				if (id < 0)
-					return;
-			}
+			FocusGenericHierarchyWithField(
+				uitoolkitDebugger.GetType().GetField("m_TreeView", NonPublicInstance).GetValue(uitoolkitDebugger),
+				"m_TreeView",
+				method: HierarchyFocusMethod.SetExpandedIds
+			);
+			uitoolkitDebugger.Repaint();
 		}
 	}
 }

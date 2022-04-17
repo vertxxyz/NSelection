@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Reflection;
 using UnityEditor;
 using UnityEditor.Timeline;
 using UnityEngine;
@@ -37,8 +36,8 @@ namespace Vertx
 			SetExpandedStates(asset, parents);
 
 			TimelineEditorWindow window = TimelineEditor.GetWindow();
-			object treeView = window.GetType().GetProperty("treeView", BindingFlags.Public | BindingFlags.Instance).GetValue(window);
-			treeView.GetType().GetMethod("Reload", BindingFlags.Public | BindingFlags.Instance).Invoke(treeView, null);
+			object treeView = window.GetType().GetProperty("treeView", PublicInstance).GetValue(window);
+			treeView.GetType().GetMethod("Reload", PublicInstance).Invoke(treeView, null);
 		}
 
 		private static void CollectParents(TrackAsset track, HashSet<TrackAsset> result)

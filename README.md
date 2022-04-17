@@ -27,6 +27,7 @@ The supported windows are:
 - **Timeline window**
 - **Animation window**
 - **UIToolkit debugger**
+- **Frame debugger**
 
 ### Collapse Hierarchy
 Assign the Collapse Hierarchy shortcuts in the Shortcut Manager (**Edit/Shortcuts/Hierarchy View**).  
