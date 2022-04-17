@@ -5,12 +5,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [1.1.1] - 2022-04-17
-- Added Focus hierarchy to selection. This is likely more useful than Collapse Hierarchy. It supports:
+- Added Focus hierarchy to selection (Alt+Shift+F). This is likely more useful than Collapse Hierarchy. It supports:
   - Hierarchy view
   - Project browser
   - Profiler window
   - Timeline window
   - Animation window
+  - Audio Mixer
   - UIToolkit debugger
   - Frame debugger
 - Fixed Collapse Hierarchy to properly collapse selected element.
