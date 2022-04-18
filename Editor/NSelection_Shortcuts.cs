@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -6,7 +7,9 @@ using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEditor.ShortcutManagement;
 using UnityEngine;
+using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
+using TreeView = UnityEditor.IMGUI.Controls.TreeView;
 using UIToolkit = UnityEngine.UIElements;
 
 namespace Vertx
@@ -60,7 +63,7 @@ namespace Vertx
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.<br/>
 		/// The supported windows are:
-		/// Hierarchy view, Project browser, Profiler window, Timeline window, Animation window, Audio Mixer, UIToolkit debugger, and Frame debugger
+		/// Hierarchy view, Project browser, Profiler window, Timeline window, Animation window, Audio Mixer, UI Builder, UIToolkit debugger, and Frame debugger
 		/// </summary>
 		[Shortcut("Window/Focus hierarchy to selection", KeyCode.F, ShortcutModifiers.Alt | ShortcutModifiers.Shift)]
 		public static void FocusCurrentHierarchyToSelection()
@@ -93,6 +96,9 @@ namespace Vertx
 						return;
 					case "UnityEditor.AudioMixerWindow":
 						FocusAudioMixerToSelection(focusedWindow);
+						return;
+					case "Unity.UI.Builder.Builder":
+						FocusUIBuilderToSelection(focusedWindow);
 						return;
 				}
 
@@ -221,35 +227,62 @@ namespace Vertx
 #if UNITY_2022_1_OR_NEWER
 			var treeView = (UIToolkit.TreeView)treeViewContainerType.GetField("m_TreeView", NonPublicInstance)
 				.GetValue(treeViewContainer);
-
-			treeView.CollapseAll();
+			return;
 #else
 			object treeView = treeViewContainerType.GetField("m_TreeView", NonPublicInstance)
 				.GetValue(treeViewContainer);
-
-			Type treeViewType = treeView.GetType();
-			MethodInfo collapseAllMethod = treeViewType.GetMethod("CollapseAll", PublicInstance);
-			if (collapseAllMethod != null)
-				collapseAllMethod.Invoke(treeView, null);
-			else
-			{
-				var expandedIds =
-					(List<int>)treeViewType.GetField("m_ExpandedItemIds", NonPublicInstance).GetValue(treeView);
-				expandedIds.Clear();
-			}
 #endif
-
-			object debuggerSelection = treeViewContainerType.GetField("m_DebuggerSelection", NonPublicInstance)
-				.GetValue(treeViewContainer);
-
-			Type debuggerSelectionType = debuggerSelection.GetType();
-			PropertyInfo selectedElement = debuggerSelectionType.GetProperty("element", PublicInstance);
-			object selection = selectedElement.GetValue(debuggerSelection);
-			debuggerSelectionType.GetField("m_Element", NonPublicInstance).SetValue(debuggerSelection, null);
-			selectedElement.SetValue(debuggerSelection, selection);
+			TreeViewFocusSelection(treeView);
 		}
 
-		/// <summary>
+#if UNITY_2022_1_OR_NEWER
+		private static void TreeViewFocusSelection(UIToolkit.TreeView treeView)
+		{
+			int[] selection =
+ ((List<int>)typeof(UIToolkit.TreeView).GetProperty("currentSelectionIds", NonPublicInstance).GetValue(treeView)).ToArray();
+			treeView.ClearSelection();
+			treeView.CollapseAll();
+			treeView.SetSelectionById(selection);
+		}
+#else
+		private static void TreeViewFocusSelection(object treeView)
+		{
+			var treeViewItemType = Type.GetType("UnityEngine.UIElements.ITreeViewItem,UnityEngine.UIElementsModule");
+			// Collect parents to expand.
+			PropertyInfo idProperty = treeViewItemType.GetProperty("id", PublicInstance);
+			PropertyInfo parentProperty = treeViewItemType.GetProperty("parent", PublicInstance);
+			Type treeViewType = treeView.GetType();
+			IEnumerable selection = (IEnumerable)treeViewType.GetProperty(
+#if UNITY_2020_1_OR_NEWER
+				"selectedItems",
+#else
+				"currentSelection",
+#endif
+				PublicInstance
+			).GetValue(treeView);
+			HashSet<int> parentIds = new HashSet<int>();
+			foreach (object o in selection)
+			{
+				for (object parent = parentProperty.GetValue(o);
+				     parent != null;
+				     parent = parentProperty.GetValue(parent))
+				{
+					if (!parentIds.Add((int)idProperty.GetValue(parent)))
+						break;
+				}
+			}
+
+			var expandedIds =
+				(List<int>)treeViewType.GetField("m_ExpandedItemIds", NonPublicInstance).GetValue(treeView);
+			expandedIds.Clear();
+			expandedIds.AddRange(parentIds);
+			expandedIds.Sort();
+
+			treeViewType.GetMethod("Refresh", PublicInstance).Invoke(treeView, null);
+		}
+#endif
+
+		/// <summary>DD
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
 		public static void FocusFrameDebuggerToSelection(EditorWindow frameDebugger)
@@ -282,8 +315,21 @@ namespace Vertx
 			{
 				FocusGenericHierarchyWithField(
 					mixerTree,
-					"m_AudioGroupTree");
+					"m_TreeView");
 			}
+		}
+
+		/// <summary>
+		/// Sets the hierarchy's expanded state to only contain the current selection.
+		/// </summary>
+		public static void FocusUIBuilderToSelection(EditorWindow uiBuilder)
+		{
+#if UNITY_2022_1_OR_NEWER
+			var treeView = (UIToolkit.TreeView)uiBuilder.rootVisualElement.Q("hierarchy").Q("explorer-container")[0];
+#else
+			object treeView = uiBuilder.rootVisualElement.Q("hierarchy").Q("explorer-container")[0];
+#endif
+			TreeViewFocusSelection(treeView);
 		}
 	}
 }

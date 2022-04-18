@@ -27,6 +27,7 @@ The supported windows are:
 - **Timeline window**
 - **Animation window**
 - **Audio Mixer**
+- **UI Builder**
 - **UIToolkit debugger**
 - **Frame debugger**
 

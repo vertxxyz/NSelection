@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   - Timeline window
   - Animation window
   - Audio Mixer
+  - UI Builder
   - UIToolkit debugger
   - Frame debugger
 - Fixed Collapse Hierarchy to properly collapse selected element.
