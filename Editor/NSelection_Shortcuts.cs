@@ -205,82 +205,13 @@ namespace Vertx
 		/// </summary>
 		public static void FocusUIToolkitDebuggerToSelection(EditorWindow uitoolkitDebugger)
 		{
-			Type uiToolkitDebuggerType = uitoolkitDebugger.GetType();
-			PropertyInfo debuggerImplProperty = uiToolkitDebuggerType.GetProperty("debuggerImpl", NonPublicInstance);
-
-			object treeViewContainer;
-			if (debuggerImplProperty != null)
-			{
-				object debuggerImpl =
-					debuggerImplProperty.GetValue(uitoolkitDebugger);
-
-				treeViewContainer = debuggerImpl.GetType().GetField("m_TreeViewContainer", NonPublicInstance)
-					.GetValue(debuggerImpl);
-			}
-			else
-			{
-				treeViewContainer = uiToolkitDebuggerType.GetField("m_TreeViewContainer", NonPublicInstance)
-					.GetValue(uitoolkitDebugger);
-			}
-
-			Type treeViewContainerType = treeViewContainer.GetType();
 #if UNITY_2022_1_OR_NEWER
-			var treeView = (UIToolkit.TreeView)treeViewContainerType.GetField("m_TreeView", NonPublicInstance)
-				.GetValue(treeViewContainer);
-			return;
+			var treeView = (UIToolkit.TreeView)uitoolkitDebugger.rootVisualElement.Q(null, "unity-tree-view");
 #else
-			object treeView = treeViewContainerType.GetField("m_TreeView", NonPublicInstance)
-				.GetValue(treeViewContainer);
+			object treeView = uitoolkitDebugger.rootVisualElement.Q("unity-tree-view__list-view", "unity-tree-view__list-view").parent;;
 #endif
 			TreeViewFocusSelection(treeView);
 		}
-
-#if UNITY_2022_1_OR_NEWER
-		private static void TreeViewFocusSelection(UIToolkit.TreeView treeView)
-		{
-			int[] selection =
- ((List<int>)typeof(UIToolkit.TreeView).GetProperty("currentSelectionIds", NonPublicInstance).GetValue(treeView)).ToArray();
-			treeView.ClearSelection();
-			treeView.CollapseAll();
-			treeView.SetSelectionById(selection);
-		}
-#else
-		private static void TreeViewFocusSelection(object treeView)
-		{
-			var treeViewItemType = Type.GetType("UnityEngine.UIElements.ITreeViewItem,UnityEngine.UIElementsModule");
-			// Collect parents to expand.
-			PropertyInfo idProperty = treeViewItemType.GetProperty("id", PublicInstance);
-			PropertyInfo parentProperty = treeViewItemType.GetProperty("parent", PublicInstance);
-			Type treeViewType = treeView.GetType();
-			IEnumerable selection = (IEnumerable)treeViewType.GetProperty(
-#if UNITY_2020_1_OR_NEWER
-				"selectedItems",
-#else
-				"currentSelection",
-#endif
-				PublicInstance
-			).GetValue(treeView);
-			HashSet<int> parentIds = new HashSet<int>();
-			foreach (object o in selection)
-			{
-				for (object parent = parentProperty.GetValue(o);
-				     parent != null;
-				     parent = parentProperty.GetValue(parent))
-				{
-					if (!parentIds.Add((int)idProperty.GetValue(parent)))
-						break;
-				}
-			}
-
-			var expandedIds =
-				(List<int>)treeViewType.GetField("m_ExpandedItemIds", NonPublicInstance).GetValue(treeView);
-			expandedIds.Clear();
-			expandedIds.AddRange(parentIds);
-			expandedIds.Sort();
-
-			treeViewType.GetMethod("Refresh", PublicInstance).Invoke(treeView, null);
-		}
-#endif
 
 		/// <summary>DD
 		/// Sets the hierarchy's expanded state to only contain the current selection.
@@ -331,5 +262,56 @@ namespace Vertx
 #endif
 			TreeViewFocusSelection(treeView);
 		}
+
+#if UNITY_2022_1_OR_NEWER
+		private static void TreeViewFocusSelection(UIToolkit.TreeView treeView)
+		{
+			int[] selection =
+				((List<int>)typeof(UIToolkit.TreeView)
+					.GetProperty("currentSelectionIds", NonPublicInstance)
+					.GetValue(treeView)).ToArray();
+			treeView.ClearSelection();
+			treeView.CollapseAll();
+			treeView.SetSelectionById(selection);
+		}
+#else
+		private static void TreeViewFocusSelection(object treeView)
+		{
+			var treeViewItemType = Type.GetType("UnityEngine.UIElements.ITreeViewItem,UnityEngine.UIElementsModule");
+			// Collect parents to expand.
+			PropertyInfo idProperty = treeViewItemType.GetProperty("id", PublicInstance);
+			PropertyInfo parentProperty = treeViewItemType.GetProperty("parent", PublicInstance);
+			Type treeViewType = treeView.GetType();
+			IEnumerable selection = (IEnumerable)treeViewType.GetProperty(
+#if UNITY_2020_1_OR_NEWER
+				"selectedItems",
+#else
+				"currentSelection",
+#endif
+				PublicInstance
+			).GetValue(treeView);
+
+			// Collect parents from selection.
+			HashSet<int> parentIds = new HashSet<int>();
+			foreach (object o in selection)
+			{
+				for (object parent = parentProperty.GetValue(o);
+				     parent != null;
+				     parent = parentProperty.GetValue(parent))
+				{
+					if (!parentIds.Add((int)idProperty.GetValue(parent)))
+						break;
+				}
+			}
+
+			var expandedIds =
+				(List<int>)treeViewType.GetField("m_ExpandedItemIds", NonPublicInstance).GetValue(treeView);
+			expandedIds.Clear();
+			expandedIds.AddRange(parentIds);
+			expandedIds.Sort();
+
+			treeViewType.GetMethod("Refresh", PublicInstance).Invoke(treeView, null);
+		}
+#endif
 	}
 }
