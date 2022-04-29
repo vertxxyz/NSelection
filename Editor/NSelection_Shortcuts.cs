@@ -100,25 +100,63 @@ namespace Vertx
 					case "Unity.UI.Builder.Builder":
 						FocusUIBuilderToSelection(focusedWindow);
 						return;
+					case "UnityEditor.InspectorWindow":
+						FocusInspectorWindowToSelection(focusedWindow);
+						return;
+					case "UnityEditor.SceneHierarchyWindow":
+						FocusHierarchyViewToSelection();
+						return;
 				}
 
 				// Debug.Log(focusedWindowTypeName);
 			}
 
 			// Focus hierarchy by default.
-			FocusHierarchyViewToSelection();
+			FocusHierarchyViewToSelection(true);
+		}
+
+		/// <summary>
+		/// Sets the expanded state of the target hierarchy to only contain the current selection.
+		/// The target hierarchy is determined by the current inspector's focused object.
+		/// This is either the scene view hierarchy, or the project view.
+		/// </summary>
+		public static void FocusInspectorWindowToSelection(EditorWindow inspectorWindow)
+		{
+			object inspectedObject = inspectorWindow.GetType()
+				.GetMethod("GetInspectedObject", NonPublicInstance)
+				?.Invoke(inspectorWindow, null);
+			if (inspectedObject is Object o)
+			{
+				if (AssetDatabase.Contains(o))
+				{
+					Object[] projectBrowsers = Resources.FindObjectsOfTypeAll(Type.GetType("UnityEditor.ProjectBrowser,UnityEditor"));
+					foreach (Object projectBrowser in projectBrowsers)
+					{
+						if (!(projectBrowser is EditorWindow editorWindow))
+							continue;
+						FocusProjectBrowserToSelection(editorWindow);
+						editorWindow.Repaint();
+					}
+
+					return;
+				}
+			}
+
+			FocusHierarchyViewToSelection(true);
 		}
 
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
-		public static void FocusHierarchyViewToSelection()
+		public static void FocusHierarchyViewToSelection(bool forceRepaint = false)
 		{
 			if (HierarchyWindow == null)
 				return;
 
 			object sceneHierarchy = SceneHierarchy;
 			FocusGenericHierarchyWithProperty(sceneHierarchy, "treeView");
+			if (forceRepaint)
+				HierarchyWindow.Repaint();
 		}
 
 		/// <summary>
@@ -208,7 +246,8 @@ namespace Vertx
 #if UNITY_2022_1_OR_NEWER
 			var treeView = (UIToolkit.TreeView)uitoolkitDebugger.rootVisualElement.Q(null, "unity-tree-view");
 #else
-			object treeView = uitoolkitDebugger.rootVisualElement.Q("unity-tree-view__list-view", "unity-tree-view__list-view").parent;;
+			object treeView = uitoolkitDebugger.rootVisualElement.Q("unity-tree-view__list-view", "unity-tree-view__list-view").parent;
+			;
 #endif
 			TreeViewFocusSelection(treeView);
 		}
