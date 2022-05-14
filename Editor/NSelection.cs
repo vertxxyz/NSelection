@@ -1,6 +1,9 @@
 ﻿/* Thomas Ingram 2018 */
 
 using System;
+#if UNITY_2022_2_OR_NEWER
+using System.Collections;
+#endif
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -139,17 +142,47 @@ namespace Vertx
 
 		#region Overlapping
 
-		private static IEnumerable<GameObject> GetAllOverlapping(Vector2 position) =>
-			_getAllOverlapping.Invoke(position);
+		private static IEnumerable<GameObject> GetAllOverlapping(Vector2 position)
+		{
+#if !UNITY_2022_2_OR_NEWER
+			return _getAllOverlapping.Invoke(position);
+		}
 
 		private static readonly Func<Vector2, IEnumerable<GameObject>> _getAllOverlapping =
 			(Func<Vector2, IEnumerable<GameObject>>)Delegate.CreateDelegate(
 				typeof(Func<Vector2, IEnumerable<GameObject>>),
 				SceneViewPickingClass.GetMethod("GetAllOverlapping", NonPublicStatic)
 			);
+#else
+			args1[0] = position;
+			IEnumerable results = (IEnumerable)GetAllOverlappingMethod.Invoke(null, args1);
+			foreach (object o in results)
+			{
+				Object target = (Object)PickingObjectTarget.GetValue(o);
+				if(target == null)
+					continue;
+				switch (target)
+				{
+					case GameObject gameObject:
+						yield return gameObject;
+						break;
+					case Component component:
+						yield return component.gameObject;
+						break;
+				}
+			}
+		}
+
+		private static readonly object[] args1 = new object[1];
+
+		private static MethodInfo _getAllOverlappingMethod;
+		private static MethodInfo GetAllOverlappingMethod => _getAllOverlappingMethod ??= SceneViewPickingClass.GetMethod("GetAllOverlapping", NonPublicStatic);
+		
+		private static PropertyInfo _pickingObjectTarget;
+		private static PropertyInfo PickingObjectTarget => _pickingObjectTarget ??= Type.GetType("UnityEditor.PickingObject,UnityEditor").GetProperty("target", PublicInstance);
+#endif
 
 		private static Type _sceneViewPickingClass;
-
 		private static Type SceneViewPickingClass => _sceneViewPickingClass ??
 		                                             (_sceneViewPickingClass =
 			                                             Type.GetType("UnityEditor.SceneViewPicking,UnityEditor"));

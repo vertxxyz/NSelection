@@ -1,5 +1,7 @@
 using System;
+#if !UNITY_2022_1_OR_NEWER
 using System.Collections;
+#endif
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -247,7 +249,6 @@ namespace Vertx
 			var treeView = (UIToolkit.TreeView)uitoolkitDebugger.rootVisualElement.Q(null, "unity-tree-view");
 #else
 			object treeView = uitoolkitDebugger.rootVisualElement.Q("unity-tree-view__list-view", "unity-tree-view__list-view").parent;
-			;
 #endif
 			TreeViewFocusSelection(treeView);
 		}

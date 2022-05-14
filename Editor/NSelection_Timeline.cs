@@ -1,6 +1,8 @@
+#if !UNITY_TIMELINE_1_5_2
 using System;
-using System.Collections.Generic;
 using System.Reflection;
+#endif
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Timeline;
 using UnityEngine.Timeline;
