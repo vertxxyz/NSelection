@@ -1,3 +1,4 @@
+#if UNITY_TIMELINE
 #if !UNITY_TIMELINE_1_5_2
 using System;
 using System.Reflection;
@@ -10,7 +11,6 @@ using Object = UnityEngine.Object;
 
 // ReSharper disable UseNegatedPatternInIsExpression
 
-#if UNITY_TIMELINE
 namespace Vertx
 {
 	public partial class NSelection
