@@ -1,11 +1,15 @@
 # NSelection
-Simple selection for busy scenes in Unity
+Simple selection for busy scenes in Unity.  
+Plus other simple additions towards editor usability.
 
-**Unity 2018.3+**
+> **Warning**  
+> Unity 2019.4+
+
+---
+If you find this resource helpful:
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Z8Z42ZYHB)
 
-----
 ## Usage:
 ### Scene view picking
 <kbd>Ctrl</kbd> **- right-mouse** to activate.  
@@ -35,6 +39,12 @@ The supported windows are:
 Assign the Collapse Hierarchy shortcuts in the Shortcut Manager (**Edit/Shortcuts/Hierarchy View**).  
 - **Collapse Hierarchy** will collapse anything but expanded Scenes and the selection.
 - **Collapse Hierarchy Completely** will collapse everything.
+
+### Project Browser Create/Script
+A shortcut for creating scripts in the project browser. Assign in (**Edit/Shortcuts/Project Browser**).
+
+### Scene View/Toggle Gizmos
+A shortcut for to toggle gizmos in the scene view. <kbd>G</kbd> by default. Assign in (**Edit/Shortcuts/Scene View**).
 
 ## Installation
 

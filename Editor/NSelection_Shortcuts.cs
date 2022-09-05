@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 #endif
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
@@ -60,6 +61,30 @@ namespace Vertx
 				return;
 
 			SetHierarchyToState(new List<int>());
+		}
+
+		[Shortcut("Project Browser/Create/Script")]
+		private static void CreateScript()
+		{
+			string GetTemplatePath()
+			{
+				if (File.Exists("Assets/ScriptTemplates/81-C# Script-NewBehaviourScript.cs.txt"))
+					return "Assets/ScriptTemplates/81-C# Script-NewBehaviourScript.cs.txt";
+
+				var basePath = Path.Combine(EditorApplication.applicationContentsPath, "Resources/ScriptTemplates");
+				return Path.Combine(basePath, "81-C# Script-NewBehaviourScript.cs.txt");
+			}
+
+			Type.GetType("UnityEditor.ProjectWindowUtil,UnityEditor")
+				.GetMethod("CreateScriptAssetFromTemplateFile", BindingFlags.Public | BindingFlags.Static)
+				.Invoke(
+					null,
+					new object[]
+					{
+						GetTemplatePath(),
+						"NewBehaviourScript.cs"
+					}
+				);
 		}
 
 		/// <summary>
@@ -353,5 +378,15 @@ namespace Vertx
 			treeViewType.GetMethod("Refresh", PublicInstance).Invoke(treeView, null);
 		}
 #endif
+
+		/// <summary>
+		/// Toggles the Scene view gizmos.
+		/// </summary>
+		[Shortcut("Scene View/Toggle Gizmos", typeof(SceneView), KeyCode.G)]
+		public static void ToggleSceneViewGizmos(ShortcutArguments args)
+		{
+			var sceneView = (SceneView)args.context;
+			sceneView.drawGizmos = !sceneView.drawGizmos;
+		}
 	}
 }
