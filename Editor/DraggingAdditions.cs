@@ -1,4 +1,5 @@
-﻿#if !DISABLE_DRAGGING_ADDITIONS
+﻿#if !UNITY_2023_2_OR_NEWER
+#if !DISABLE_DRAGGING_ADDITIONS
 using System;
 using System.Reflection;
 using UnityEditor;
@@ -211,4 +212,5 @@ namespace Vertx
 		#endregion
 	}
 }
+#endif
 #endif
