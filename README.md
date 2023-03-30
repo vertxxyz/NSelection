@@ -5,11 +5,6 @@ Plus other simple additions towards editor usability.
 > **Warning**  
 > Unity 2019.4+
 
----
-If you find this resource helpful:
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Z8Z42ZYHB)
-
 ## Usage:
 ### Scene view picking
 <kbd>Ctrl</kbd> **- right-mouse** to activate.  
@@ -19,6 +14,7 @@ Press <kbd>Escape</kbd> or **click** outside the selection list to end the curre
 ![gif](http://vertx.xyz/Images/NSelection/nSelection4.gif)
 
 ### Drag and drop between tabs
+(This is now built-in for Unity 2023.2+!)  
 ![gif](http://vertx.xyz/Images/NSelection/nSelectionDragging.gif)
 
 ### Focus hierarchy to selection
@@ -48,40 +44,29 @@ A shortcut for to toggle gizmos in the scene view. <kbd>G</kbd> by default. Assi
 
 ## Installation
 
-<details>
-<summary>Add from OpenUPM <em>| via scoped registry, recommended</em></summary>
+[![openupm](https://img.shields.io/npm/v/com.vertx.nselection?label=openupm&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.vertx.nselection/)
 
-This package is available on OpenUPM: https://openupm.com/packages/com.vertx.nselection
+<table><tr><td>
 
-To add it the package to your project:
+#### Add the OpenUPM registry
+1. Open `Edit/Project Settings/Package Manager`
+1. Add a new Scoped Registry (or edit the existing OpenUPM entry):
+   ```
+   Name: OpenUPM
+   URL:  https://package.openupm.com/
+   Scope(s): com.vertx
+   ```
+1. **Save**
 
-- open `Edit/Project Settings/Package Manager`
-- add a new Scoped Registry:
-  ```
-  Name: OpenUPM
-  URL:  https://package.openupm.com/
-  Scope(s): com.vertx
-  ```
-- click <kbd>Save</kbd>
-- open Package Manager
-- click <kbd>+</kbd>
-- select <kbd>Add from Git URL</kbd>
-- paste `com.vertx.nselection`
-- click <kbd>Add</kbd>
-</details>
+#### Add the package
+1. Open the Package Manager via `Window/Package Manager`.
+1. Select the <kbd>+</kbd> from the top left of the window.
+1. Select **Add package by Name** or **Add package from Git URL**.
+1. Enter `com.vertx.nselection`.
+1. Select **Add**.
 
-<details>
-<summary>Add from GitHub | <em>not recommended, no updates through UPM</em></summary>
+</td></tr></table>
 
-You can also add it directly from GitHub on Unity 2019.4+. Note that you won't be able to receive updates through Package Manager this way, you'll have to update manually.
+If you find this resource helpful:
 
-- open Package Manager
-- click <kbd>+</kbd>
-- select <kbd>Add from Git URL</kbd>
-- paste `https://github.com/vertxxyz/NSelection.git`
-- click <kbd>Add</kbd>  
-**or**  
-- Edit your `manifest.json` file to contain `"com.vertx.nselection": "https://github.com/vertxxyz/NSelection.git"`,
-  
-To update the package with new changes, remove the lock from the `packages-lock.json` file.
-</details>
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Z8Z42ZYHB)

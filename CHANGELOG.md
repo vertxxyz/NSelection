@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [1.2.0]
+- Removed tab dragging code from 2023.2+ as it's now built-in!
 - Added a shortcut for toggling gizmos in the scene view. Defaults to G. If you're using ProBuilder this will be a conflict. Assign or resolve in Edit/Shortcuts/Scene View.
 - Added a shortcut for creating scripts in the project browser. Assign in Edit/Shortcuts/Project Browser.
 - Increased minimum version to 2019.4. It's likely this is late, sorry!

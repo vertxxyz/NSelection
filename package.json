@@ -8,6 +8,8 @@
     "name": "Vertx",
     "url": "https://github.com/vertxxyz"
   },
+  "changelogUrl": "https://github.com/vertxxyz/NSelection/blob/master/CHANGELOG.md",
+  "documentationUrl": "https://github.com/vertxxyz/NSelection/blob/master/README.md",
   "keywords": [
   	"Editor"
   ],
