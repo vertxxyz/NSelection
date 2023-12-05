@@ -7,14 +7,20 @@ Plus other simple additions towards editor usability.
 
 ## Usage:
 ### Scene view picking
+> **Info**  
+> There is a built-in implementation as of 2023.3.0a16+.  
+> v1.3.0 provides shortcut resolution to allow use of either.
+
 <kbd>Ctrl</kbd> **- right-mouse** to activate.  
-Hold <kbd>Ctrl</kbd> during selection to select multiple objects.  
+Hold <kbd>Ctrl</kbd> during selection to select or deselect multiple objects.  
 Press <kbd>Escape</kbd> or **click** outside the selection list to end the current selection.  
 
 ![gif](http://vertx.xyz/Images/NSelection/nSelection4.gif)
 
 ### Drag and drop between tabs
-(This is now built-in for Unity 2023.2+!)  
+> **Info**  
+> This is now built-in for Unity 2023.2+!
+
 ![gif](http://vertx.xyz/Images/NSelection/nSelectionDragging.gif)
 
 ### Focus hierarchy to selection

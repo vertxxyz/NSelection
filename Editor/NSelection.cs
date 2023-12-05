@@ -16,9 +16,12 @@ using Object = UnityEngine.Object;
 
 namespace Vertx
 {
+#if !UNITY_2023_3_OR_NEWER
 	[InitializeOnLoad]
-	public partial class NSelection
+#endif
+	public static partial class NSelection
 	{
+#if !UNITY_2023_3_OR_NEWER
 		static NSelection() => RefreshListeners();
 
 		private static void RefreshListeners()
@@ -31,13 +34,54 @@ namespace Vertx
 			SceneView.onSceneGUIDelegate += OnSceneGUI;
 #endif
 		}
+		
+		private static bool _mouseRightIsDownWithoutDrag;
+#endif
 
 		private const BindingFlags NonPublicInstance = BindingFlags.NonPublic | BindingFlags.Instance;
 		private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
 		private const BindingFlags NonPublicStatic = BindingFlags.Static | BindingFlags.NonPublic;
 		private const BindingFlags PublicStatic = BindingFlags.Static | BindingFlags.Public;
-		private static bool _mouseRightIsDownWithoutDrag;
+		
+#if UNITY_2023_3_OR_NEWER
+		private const string NSelectionMenuCommand = nameof(NSelection) + "Command";
+		
+		[UnityEditor.ShortcutManagement.Shortcut("Scene View/Show Deep Selection Menu", typeof(SceneView), KeyCode.Mouse1, UnityEditor.ShortcutManagement.ShortcutModifiers.Action)]
+		static void ShowDeepSelectionMenu(UnityEditor.ShortcutManagement.ShortcutArguments args)
+		{
+			if (args.context is not SceneView view)
+				return;
+			
+			SceneView.duringSceneGui += ShowDeepSelectionMenu;
+			try
+			{
+				var evt = Event.current;
 
+				view.SendEvent(new Event
+				{
+					commandName = NSelectionMenuCommand,
+					type = EventType.ValidateCommand,
+					mousePosition = evt.mousePosition
+				});
+
+				view.SendEvent(new Event
+				{
+					commandName = NSelectionMenuCommand,
+					type = EventType.ExecuteCommand,
+					mousePosition = evt.mousePosition
+				});
+
+			}
+			finally
+			{
+				SceneView.duringSceneGui -= ShowDeepSelectionMenu;
+			}
+		}
+		
+		private static void ShowDeepSelectionMenu(SceneView view) => OpenDeepSelectionMenu(view, Event.current);
+#endif
+		
+#if !UNITY_2023_3_OR_NEWER
 		private static void OnSceneGUI(SceneView sceneView)
 		{
 			Event e = Event.current;
@@ -59,6 +103,22 @@ namespace Vertx
 			if (!_mouseRightIsDownWithoutDrag || e.rawType != EventType.MouseUp)
 				return;
 
+			OpenDeepSelectionMenu(sceneView, e);
+		}
+#endif
+
+		private static void OpenDeepSelectionMenu(SceneView sceneView, Event e)
+		{
+#if UNITY_2023_3_OR_NEWER
+			if (e.type == EventType.ValidateCommand && e.commandName == NSelectionMenuCommand)
+				e.Use();
+
+			if(e.type != EventType.ExecuteCommand || e.commandName != NSelectionMenuCommand)
+				return;
+
+			e.Use();
+#endif
+			
 			IEnumerable<GameObject> allOverlapping = GetAllOverlapping(e.mousePosition);
 			List<SelectionItem> totalSelection = SelectionPopup.TotalSelection;
 			totalSelection.Clear();
@@ -132,8 +192,10 @@ namespace Vertx
 			);
 
 			e.alt = false;
+#if !UNITY_2023_3_OR_NEWER
 			_mouseRightIsDownWithoutDrag = false;
 			e.Use();
+#endif
 
 			PopupWindow.Show(buttonRect, new SelectionPopup());
 

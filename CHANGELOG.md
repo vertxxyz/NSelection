@@ -4,6 +4,11 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [1.3.0]
+- 2023.3 updates:
+  - Added shortcut, to resolve conflicts with new piercing selection menu.
+  - Using the Scene view picker with an active selection no longer clears it.
+
 ## [1.2.0]
 - Removed tab dragging code from 2023.2+ as it's now built-in!
 - Added a shortcut for toggling gizmos in the scene view. Defaults to G. If you're using ProBuilder this will be a conflict. Assign or resolve in Edit/Shortcuts/Scene View.
