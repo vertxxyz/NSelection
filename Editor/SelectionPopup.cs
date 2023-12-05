@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
+
 // ReSharper disable ConvertToNullCoalescingCompoundAssignment
 
 namespace Vertx
@@ -22,7 +23,7 @@ namespace Vertx
 
 	internal class SelectionPopup : PopupWindowContent
 	{
-		public static List<SelectionItem> TotalSelection = new List<SelectionItem>();
+		public static readonly List<SelectionItem> TotalSelection = new List<SelectionItem>();
 		private float _iconOffset;
 		private float _iconOffsetTarget;
 		private static int _currentlyHoveringIndex;
@@ -66,7 +67,12 @@ namespace Vertx
 
 		#endregion
 
-		public SelectionPopup() => RefreshSelection();
+		public SelectionPopup()
+		{
+			_initialExpandedIDs = NSelection.GetHierarchyExpandedState();
+			_allExpandedIDs = _initialExpandedIDs.ToArray();
+			ResetCurrentSelection();
+		}
 
 		public override void OnOpen()
 		{
@@ -114,6 +120,17 @@ namespace Vertx
 				SceneView.onSceneGUIDelegate -= CaptureEvents;
 #endif
 			};
+			
+			// Reset visible hierarchy elements to the minimal set
+			ResetHierarchyToExpandedStateIncludingSelection(_initialExpandedIDs);
+
+			// Fix issues where the FPS controls are stuck on.
+			Tools.viewTool = ViewTool.None;
+
+			ScrollPosition = 0;
+			TotalSelection.Clear();
+			_currentSelection.Clear();
+			SceneView.RepaintAll();
 		}
 
 		private int _scrollDelta;
@@ -275,7 +292,7 @@ namespace Vertx
 						// Otherwise we need to alter the current selection to add or remove the currently hovered selection.
 						if (isInSelection)
 						{
-							ResetHierarchyToExpandedState();
+							ResetHierarchyToExpandedState(_allExpandedIDs);
 							// Remove the GameObject.
 							Object[] newSelection = new Object[_currentSelection.Count - 1];
 							int n = 0;
@@ -319,7 +336,6 @@ namespace Vertx
 				switch (e.keyCode)
 				{
 					case KeyCode.Escape:
-						RevertPreviewSelection();
 						EndSelection();
 						break;
 					case KeyCode.Return:
@@ -330,8 +346,6 @@ namespace Vertx
 			}
 			else if (e.isMouse && e.type == EventType.MouseUp)
 			{
-				if (highlightedIndex == -1)
-					RevertPreviewSelection();
 				EndSelection();
 			}
 
@@ -343,26 +357,16 @@ namespace Vertx
 
 		private double lastTime;
 
-		private void EndSelection()
-		{
-			// Fix issues where the FPS controls are stuck on.
-			Tools.viewTool = ViewTool.None;
-
-			ScrollPosition = 0;
-			TotalSelection.Clear();
-			_currentSelection.Clear();
-			SceneView.RepaintAll();
-			editorWindow.Close();
-		}
+		private void EndSelection() => editorWindow.Close();
 
 		/// <summary>
 		/// Reverts the currently active selection preview. The selection is visualised before selection, and this method removes the visualisation.
 		/// </summary>
 		private void RevertPreviewSelection()
 		{
-			ResetHierarchyToExpandedState();
+			ResetHierarchyToExpandedState(_allExpandedIDs);
 			_lastHighlightedIndex = -1;
-			//Revert to _currentSelection
+			// Revert to _currentSelection
 			Object[] newSelection = new Object[_currentSelection.Count];
 			int n = 0;
 			foreach (GameObject g in _currentSelection)
@@ -370,9 +374,8 @@ namespace Vertx
 			Selection.objects = newSelection;
 		}
 
-		private static void RefreshSelection()
+		private static void ResetCurrentSelection()
 		{
-			SetHierarchyExpandedState();
 			_currentSelection.Clear();
 			_currentSelection.UnionWith(Selection.gameObjects);
 		}
@@ -401,23 +404,28 @@ namespace Vertx
 			if (!isShift)
 				EndSelection();
 			else
-				RefreshSelection();
+			{
+				SetHierarchyExpandedState();
+				ResetCurrentSelection();
+			}
+
 			SceneView.RepaintAll();
 		}
 
 		private static int[] _allExpandedIDs;
+		private static int[] _initialExpandedIDs;
 
 		private static void SetHierarchyExpandedState() => _allExpandedIDs = NSelection.GetHierarchyExpandedState();
 
-		private static void ResetHierarchyToExpandedState()
+		private static void ResetHierarchyToExpandedState(int[] expandedIds)
 		{
-			if (_allExpandedIDs == null)
+			if (expandedIds == null)
 				return;
 
 			if (NSelection.HierarchyWindow == null)
 				return;
 
-			NSelection.SetHierarchyToState(new List<int>(_allExpandedIDs));
+			NSelection.SetHierarchyToState(new List<int>(expandedIds));
 		}
 
 		private static void ResetHierarchyToExpandedStateExcept(GameObject gameObject)
@@ -448,6 +456,32 @@ namespace Vertx
 			// If unsorted, the hierarchy will break.
 			newState.Sort();
 
+			NSelection.SetHierarchyToState(newState);
+		}
+
+		private static void ResetHierarchyToExpandedStateIncludingSelection(int[] expandedIds)
+		{
+			if (expandedIds == null)
+				return;
+
+			if (NSelection.HierarchyWindow == null)
+				return;
+
+			var newStateSet = new HashSet<int>(expandedIds);
+			foreach (GameObject gameObject in Selection.gameObjects)
+			{
+				Transform t = gameObject.transform;
+				while (t.parent != null)
+				{
+					t = t.parent;
+					if (!newStateSet.Add(t.gameObject.GetInstanceID()))
+						break;
+				}
+			}
+			
+			List<int> newState = newStateSet.ToList();
+			// If unsorted, the hierarchy will break.
+			newState.Sort();
 			NSelection.SetHierarchyToState(newState);
 		}
 	}

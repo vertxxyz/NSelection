@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - 2023.3 updates:
   - Added shortcut, to resolve conflicts with new piercing selection menu.
   - Using the Scene view picker with an active selection no longer clears it.
+- Reduced hierarchy expansion in specific multi-select cases.
 
 ## [1.2.0]
 - Removed tab dragging code from 2023.2+ as it's now built-in!
