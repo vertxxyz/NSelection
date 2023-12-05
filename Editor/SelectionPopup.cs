@@ -30,7 +30,6 @@ namespace Vertx
 
 		public static float ScrollPosition;
 		private Vector2 _originalPosition;
-		private bool _initialised;
 		private const int MaxIcons = 7;
 
 		#region Styling
@@ -137,17 +136,19 @@ namespace Vertx
 		private static readonly HashSet<GameObject> _currentSelection = new HashSet<GameObject>();
 		private int _lastHighlightedIndex = -1;
 		private bool _additionWasLastHeldForPreview;
+		private bool _initialisedPosition;
 
 		public override void OnGUI(Rect position)
 		{
-			if (!_initialised)
-			{
-				_originalPosition = editorWindow.position.position;
-				_initialised = true;
-			}
-
 			Event e = Event.current;
 			bool additive = e.control || e.command || e.shift;
+
+			Vector2 windowPos = editorWindow.position.position;
+			if (!_initialisedPosition && windowPos != Vector2.zero)
+			{
+				_originalPosition = windowPos;
+				_initialisedPosition = true;
+			}
 
 			GUIUtility.hotControl = 0;
 
