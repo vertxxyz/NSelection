@@ -1,30 +1,32 @@
 # NSelection
+[![openupm](https://img.shields.io/npm/v/com.vertx.nselection?label=openupm&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.vertx.nselection/)
+
 Simple selection for busy scenes in Unity.  
 Plus other simple additions towards editor usability.
 
-> **Warning**  
+> [!IMPORTANT]
 > Unity 2019.4+
 
 ## Usage:
-### Scene view picking
-> **Info**  
+### Deep Scene view picking
+> [!NOTE]  
 > There is a built-in implementation as of 2023.3.0a16+.  
 > v1.3.0 provides shortcut resolution to allow use of either.
 
-<kbd>Ctrl</kbd> **- right-mouse** to activate.  
-Hold <kbd>Ctrl</kbd> during selection to select or deselect multiple objects.  
-Press <kbd>Escape</kbd> or **click** outside the selection list to end the current selection.  
+<kbd>Ctrl</kbd><kbd>Right-click</kbd> to activate.  
+Hold <kbd>Ctrl</kbd> or <kbd>Shift</kbd> during selection to select or deselect multiple objects.  
+Press <kbd>Escape</kbd> or **click** outside the menu to end the current selection.  
 
 ![gif](http://vertx.xyz/Images/NSelection/nSelection4.gif)
 
 ### Drag and drop between tabs
-> **Info**  
-> This is now built-in for Unity 2023.2+!
+> [!NOTE]
+> This is now built-in as of Unity 2023.2+!
 
 ![gif](http://vertx.xyz/Images/NSelection/nSelectionDragging.gif)
 
 ### Focus hierarchy to selection
-<kbd>Alt+Shift+F</kbd> sets the hierarchy's expanded state to only contain the current selection.  
+<kbd>Alt</kbd><kbd>Shift</kbd><kbd>F</kbd> sets the hierarchy's expanded state to only contain the current selection.  
 You can rebind this in the Shortcut Manager (**Edit/Shortcuts/Window**).  
 The supported windows are:
 - **Hierarchy view**
