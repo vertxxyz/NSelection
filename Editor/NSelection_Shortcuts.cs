@@ -10,6 +10,7 @@ using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEditor.ShortcutManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
 using TreeView = UnityEditor.IMGUI.Controls.TreeView;
@@ -30,21 +31,23 @@ namespace Vertx
 			object sceneHierarchy = SceneHierarchy;
 
 			int[] expandedState = GetHierarchyExpandedState();
-			List<int> newState = new List<int>();
+			var newState = new List<int>();
 
 			// Collect selection and objects up to the root.
-			HashSet<GameObject> selection = new HashSet<GameObject>();
+			var selection = new HashSet<GameObject>();
+			var scenes = new HashSet<Scene>();
 			GameObject[] selectedGameObjects = Selection.gameObjects;
 			foreach (GameObject selected in selectedGameObjects)
+			{
 				CollectParents(selected, selection);
+				scenes.Add(selected.scene);
+			}
 
 			// Persist the selection in the state.
 			foreach (int i in expandedState)
 			{
-				Object o = HierarchyIdToObject(i, sceneHierarchy);
-				// Scenes come through as null. I could improve this to be more accurate, but I'm unsure whether there's a need.
-				// Will improve this if bugs are reported.
-				if (o == null || o is SceneAsset || selection.Contains(o))
+				HierarchyIdToObject(i, out Object o, out Scene scene, sceneHierarchy);
+				if (selection.Contains(o) || scene.IsValid() && scenes.Contains(scene))
 					newState.Add(i);
 			}
 
@@ -66,17 +69,8 @@ namespace Vertx
 		[Shortcut("Project Browser/Create/Script")]
 		private static void CreateScript()
 		{
-			string GetTemplatePath()
-			{
-				if (File.Exists("Assets/ScriptTemplates/81-C# Script-NewBehaviourScript.cs.txt"))
-					return "Assets/ScriptTemplates/81-C# Script-NewBehaviourScript.cs.txt";
-
-				var basePath = Path.Combine(EditorApplication.applicationContentsPath, "Resources/ScriptTemplates");
-				return Path.Combine(basePath, "81-C# Script-NewBehaviourScript.cs.txt");
-			}
-
-			Type.GetType("UnityEditor.ProjectWindowUtil,UnityEditor")
-				.GetMethod("CreateScriptAssetFromTemplateFile", BindingFlags.Public | BindingFlags.Static)
+			Type.GetType("UnityEditor.ProjectWindowUtil,UnityEditor")!
+				.GetMethod("CreateScriptAssetFromTemplateFile", BindingFlags.Public | BindingFlags.Static)!
 				.Invoke(
 					null,
 					new object[]
@@ -85,6 +79,16 @@ namespace Vertx
 						"NewBehaviourScript.cs"
 					}
 				);
+			return;
+
+			string GetTemplatePath()
+			{
+				if (File.Exists("Assets/ScriptTemplates/81-C# Script-NewBehaviourScript.cs.txt"))
+					return "Assets/ScriptTemplates/81-C# Script-NewBehaviourScript.cs.txt";
+
+				string basePath = Path.Combine(EditorApplication.applicationContentsPath, "Resources/ScriptTemplates");
+				return Path.Combine(basePath, "81-C# Script-NewBehaviourScript.cs.txt");
+			}
 		}
 
 		/// <summary>
@@ -191,7 +195,7 @@ namespace Vertx
 		/// </summary>
 		public static void FocusProfilerWindowToSelection(EditorWindow profilerWindow)
 		{
-			var interfaceType = Type.GetType("UnityEditorInternal.IProfilerWindowController,UnityEditor");
+			var interfaceType = Type.GetType("UnityEditorInternal.IProfilerWindowController,UnityEditor")!;
 
 			// Get the selected profiler module, with fallbacks.
 			PropertyInfo selectedModuleProperty = interfaceType.GetProperty("selectedModule", PublicInstance);
@@ -203,9 +207,9 @@ namespace Vertx
 			{
 				// m_ProfilerModules[(int) m_CurrentArea].
 				Type profilerWindowType = profilerWindow.GetType();
-				Array modules = (Array)profilerWindowType.GetField("m_ProfilerModules", NonPublicInstance)
+				var modules = (Array)profilerWindowType.GetField("m_ProfilerModules", NonPublicInstance)!
 					.GetValue(profilerWindow);
-				int index = (int)profilerWindowType.GetField("m_CurrentArea", NonPublicInstance)
+				var index = (int)profilerWindowType.GetField("m_CurrentArea", NonPublicInstance)!
 					.GetValue(profilerWindow);
 				module = modules.GetValue(index);
 			}
@@ -221,7 +225,7 @@ namespace Vertx
 			{
 				// ProfilerFrameDataHierarchyView
 				object frameDataHierarchyView = frameDataHierarchyViewProperty.GetValue(module);
-				TreeView treeView = (TreeView)frameDataHierarchyView.GetType().GetProperty("treeView", PublicInstance)
+				var treeView = (TreeView)frameDataHierarchyView.GetType().GetProperty("treeView", PublicInstance)!
 					.GetValue(frameDataHierarchyView);
 				treeView.state.expandedIDs = new List<int>();
 				treeView.SetSelection(treeView.state.selectedIDs, TreeViewSelectionOptions.RevealAndFrame);
@@ -236,10 +240,10 @@ namespace Vertx
 		{
 			Type windowType = projectBrowser.GetType();
 			object folderTree = windowType
-				.GetField("m_FolderTree", NonPublicInstance)
+				.GetField("m_FolderTree", NonPublicInstance)!
 				.GetValue(projectBrowser);
 			object assetTreeTree = windowType
-				.GetField("m_AssetTree", NonPublicInstance)
+				.GetField("m_AssetTree", NonPublicInstance)!
 				.GetValue(projectBrowser);
 
 			if (folderTree != null)
@@ -254,10 +258,12 @@ namespace Vertx
 		/// </summary>
 		public static void FocusAnimationWindowToSelection(EditorWindow animationWindow)
 		{
-			object animEditor = animationWindow.GetType().GetProperty("animEditor", NonPublicInstance)
+			object animEditor = animationWindow.GetType().GetProperty("animEditor", NonPublicInstance)!
 				.GetValue(animationWindow);
 			object animationWindowHierarchy =
-				animEditor.GetType().GetField("m_Hierarchy", NonPublicInstance).GetValue(animEditor);
+				animEditor.GetType()
+					.GetField("m_Hierarchy", NonPublicInstance)!
+					.GetValue(animEditor);
 			FocusGenericHierarchyWithField(
 				animationWindowHierarchy,
 				"m_TreeView"
@@ -288,7 +294,7 @@ namespace Vertx
 				treeView = frameDebugger.GetType().GetField("m_Tree", NonPublicInstance);
 
 			FocusGenericHierarchyWithField(
-				treeView.GetValue(frameDebugger),
+				treeView!.GetValue(frameDebugger),
 				"m_TreeView");
 		}
 
@@ -305,7 +311,7 @@ namespace Vertx
 					"m_AudioGroupTree");
 			}
 
-			object mixerTree = audioMixerWindow.GetType().GetField("m_MixersTree", NonPublicInstance)
+			object mixerTree = audioMixerWindow.GetType().GetField("m_MixersTree", NonPublicInstance)!
 				.GetValue(audioMixerWindow);
 			if (mixerTree != null)
 			{
@@ -333,7 +339,7 @@ namespace Vertx
 		{
 			int[] selection =
 				((List<int>)typeof(UIToolkit.TreeView)
-					.GetProperty("currentSelectionIds", NonPublicInstance)
+					.GetProperty("currentSelectionIds", NonPublicInstance)!
 					.GetValue(treeView)).ToArray();
 			treeView.ClearSelection();
 			treeView.CollapseAll();

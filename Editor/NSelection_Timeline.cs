@@ -53,8 +53,8 @@ namespace Vertx
 			EditorWindow window =
 				(EditorWindow)typeof(TimelineEditor).GetProperty("window", NonPublicStatic).GetValue(null);
 #endif
-			object treeView = window.GetType().GetProperty("treeView", PublicInstance).GetValue(window);
-			treeView.GetType().GetMethod("Reload", PublicInstance).Invoke(treeView, null);
+			object treeView = window.GetType().GetProperty("treeView", PublicInstance)!.GetValue(window);
+			treeView.GetType().GetMethod("Reload", PublicInstance)!.Invoke(treeView, null);
 		}
 
 		private static void CollectParents(TrackAsset track, HashSet<TrackAsset> result)
