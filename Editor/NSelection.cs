@@ -10,6 +10,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
 // ReSharper disable ConvertToNullCoalescingCompoundAssignment
@@ -35,7 +36,7 @@ namespace Vertx
 #endif
 		}
 		
-		private static bool _mouseRightIsDownWithoutDrag;
+		private static bool s_mouseRightIsDownWithoutDrag;
 #endif
 
 		private const BindingFlags NonPublicInstance = BindingFlags.NonPublic | BindingFlags.Instance;
@@ -47,7 +48,7 @@ namespace Vertx
 		private const string NSelectionMenuCommand = nameof(NSelection) + "Command";
 		
 		[UnityEditor.ShortcutManagement.Shortcut("Scene View/Show Deep Selection Menu", typeof(SceneView), KeyCode.Mouse1, UnityEditor.ShortcutManagement.ShortcutModifiers.Action)]
-		static void ShowDeepSelectionMenu(UnityEditor.ShortcutManagement.ShortcutArguments args)
+		private static void ShowDeepSelectionMenu(UnityEditor.ShortcutManagement.ShortcutArguments args)
 		{
 			if (args.context is not SceneView view)
 				return;
@@ -92,15 +93,15 @@ namespace Vertx
 			switch (e.rawType)
 			{
 				case EventType.MouseDown:
-					_mouseRightIsDownWithoutDrag = true;
+					s_mouseRightIsDownWithoutDrag = true;
 					break;
 				case EventType.MouseDrag:
-					_mouseRightIsDownWithoutDrag = false;
+					s_mouseRightIsDownWithoutDrag = false;
 					break;
 			}
 
 			//The actual CTRL+RIGHT-MOUSE functionality
-			if (!_mouseRightIsDownWithoutDrag || e.rawType != EventType.MouseUp)
+			if (!s_mouseRightIsDownWithoutDrag || e.rawType != EventType.MouseUp)
 				return;
 
 			OpenDeepSelectionMenu(sceneView, e);
@@ -132,7 +133,7 @@ namespace Vertx
 					{
 						if (!canvas.enabled)
 							continue;
-						bool canvasInParentsEnabled = true;
+						var canvasInParentsEnabled = true;
 						while (canvas != null)
 						{
 							Transform parent = canvas.transform.parent;
@@ -153,7 +154,7 @@ namespace Vertx
 				}
 
 				Component[] components = overlapping.GetComponents<Component>();
-				GUIContent[] icons = new GUIContent[components.Length - 1];
+				var icons = new GUIContent[components.Length - 1];
 				for (var i = 1; i < components.Length; i++)
 				{
 					if (components[i] == null)
@@ -193,7 +194,7 @@ namespace Vertx
 
 			e.alt = false;
 #if !UNITY_2023_3_OR_NEWER
-			_mouseRightIsDownWithoutDrag = false;
+			s_mouseRightIsDownWithoutDrag = false;
 			e.Use();
 #endif
 
@@ -216,11 +217,11 @@ namespace Vertx
 				SceneViewPickingClass.GetMethod("GetAllOverlapping", NonPublicStatic)
 			);
 #else
-			args1[0] = position;
-			IEnumerable results = (IEnumerable)GetAllOverlappingMethod.Invoke(null, args1);
+			s_args1[0] = position;
+			var results = (IEnumerable)GetAllOverlappingMethod.Invoke(null, s_args1);
 			foreach (object o in results)
 			{
-				Object target = (Object)PickingObjectTarget.GetValue(o);
+				var target = (Object)PickingObjectTarget.GetValue(o);
 				if(target == null)
 					continue;
 				switch (target)
@@ -235,42 +236,42 @@ namespace Vertx
 			}
 		}
 
-		private static readonly object[] args1 = new object[1];
+		private static readonly object[] s_args1 = new object[1];
 
-		private static MethodInfo _getAllOverlappingMethod;
-		private static MethodInfo GetAllOverlappingMethod => _getAllOverlappingMethod ??= SceneViewPickingClass.GetMethod("GetAllOverlapping", NonPublicStatic);
+		private static MethodInfo s_getAllOverlappingMethod;
+		private static MethodInfo GetAllOverlappingMethod => s_getAllOverlappingMethod ??= SceneViewPickingClass.GetMethod("GetAllOverlapping", NonPublicStatic);
 		
-		private static PropertyInfo _pickingObjectTarget;
-		private static PropertyInfo PickingObjectTarget => _pickingObjectTarget ??= Type.GetType("UnityEditor.PickingObject,UnityEditor").GetProperty("target", PublicInstance);
+		private static PropertyInfo s_pickingObjectTarget;
+		private static PropertyInfo PickingObjectTarget => s_pickingObjectTarget ??= Type.GetType("UnityEditor.PickingObject,UnityEditor")!.GetProperty("target", PublicInstance);
 #endif
 
-		private static Type _sceneViewPickingClass;
-		private static Type SceneViewPickingClass => _sceneViewPickingClass ??
-		                                             (_sceneViewPickingClass =
+		private static Type s_sceneViewPickingClass;
+		private static Type SceneViewPickingClass => s_sceneViewPickingClass ??
+		                                             (s_sceneViewPickingClass =
 			                                             Type.GetType("UnityEditor.SceneViewPicking,UnityEditor"));
 
 		#endregion
 
 		#region Hierarchy Window Manipulation
 
-		private static Type _sceneHierarchyType;
-		private static Type SceneHierarchyType => _sceneHierarchyType ??
-		                                          (_sceneHierarchyType =
+		private static Type s_sceneHierarchyType;
+		private static Type SceneHierarchyType => s_sceneHierarchyType ??
+		                                          (s_sceneHierarchyType =
 			                                          Type.GetType("UnityEditor.SceneHierarchy,UnityEditor"));
-		private static Type _sceneHierarchyWindowType;
-		private static Type SceneHierarchyWindowType => _sceneHierarchyWindowType ??
-		                                                (_sceneHierarchyWindowType =
+		private static Type s_sceneHierarchyWindowType;
+		private static Type SceneHierarchyWindowType => s_sceneHierarchyWindowType ??
+		                                                (s_sceneHierarchyWindowType =
 			                                                Type.GetType(
 				                                                "UnityEditor.SceneHierarchyWindow,UnityEditor"));
-		private static Type _treeViewController;
-		private static Type TreeViewController => _treeViewController ?? (_treeViewController =
+		private static Type s_treeViewController;
+		private static Type TreeViewController => s_treeViewController ?? (s_treeViewController =
 			Type.GetType("UnityEditor.IMGUI.Controls.TreeViewController,UnityEditor"));
-		private static EditorWindow _hierarchyWindow;
+		private static EditorWindow s_hierarchyWindow;
 		public static EditorWindow HierarchyWindow =>
-			_hierarchyWindow == null ? _hierarchyWindow = GetHierarchyWindow() : _hierarchyWindow;
+			s_hierarchyWindow == null ? s_hierarchyWindow = GetHierarchyWindow() : s_hierarchyWindow;
 
 		public static object SceneHierarchy => SceneHierarchyWindowType
-			.GetField("m_SceneHierarchy", NonPublicInstance).GetValue(HierarchyWindow);
+			.GetField("m_SceneHierarchy", NonPublicInstance)!.GetValue(HierarchyWindow);
 
 		/// <summary>
 		/// Sets the hierarchy's expanded state to <see cref="state"/>. <see cref="state"/> must be sorted.
@@ -280,14 +281,20 @@ namespace Vertx
 		public static void SetHierarchyToState(List<int> state, object sceneHierarchy = null)
 		{
 			sceneHierarchy = sceneHierarchy ?? SceneHierarchy;
-			TreeViewState treeViewState = (TreeViewState)SceneHierarchyType
-				.GetProperty("treeViewState", NonPublicInstance).GetValue(sceneHierarchy);
+			
+			var treeViewState = (TreeViewState)SceneHierarchyType
+				.GetProperty("treeViewState", NonPublicInstance)!
+				.GetValue(sceneHierarchy);
+			
 			treeViewState.expandedIDs = state;
+			
 			// Reload the state data because otherwise the tree view does not actually collapse.
-			MethodInfo reloadDataMI = TreeViewController.GetMethod("ReloadData");
-			reloadDataMI.Invoke(
-				SceneHierarchyType.GetProperty("treeView", NonPublicInstance)
-					.GetValue(sceneHierarchy), null);
+			MethodInfo reloadData = TreeViewController.GetMethod("ReloadData")!;
+			reloadData.Invoke(
+				SceneHierarchyType.GetProperty("treeView", NonPublicInstance)!
+					.GetValue(sceneHierarchy),
+				null
+			);
 		}
 		
 		private static void FocusGenericHierarchyWithProperty(object stateParent,
@@ -296,7 +303,7 @@ namespace Vertx
 		{
 			Type windowType = stateParent.GetType();
 			object treeView = windowType
-				.GetProperty(treeViewPropertyName, flags)
+				.GetProperty(treeViewPropertyName, flags)!
 				.GetValue(stateParent);
 			FocusGenericHierarchy(treeView);
 		}
@@ -307,29 +314,30 @@ namespace Vertx
 		{
 			Type windowType = window.GetType();
 			object treeView = windowType
-				.GetField(treeViewFieldName, flags)
+				.GetField(treeViewFieldName, flags)!
 				.GetValue(window);
 			FocusGenericHierarchy(treeView);
 		}
 		
 		private static void FocusGenericHierarchy(object treeView)
 		{
-			TreeViewState treeViewState = (TreeViewState)TreeViewController
-				.GetProperty("state", PublicInstance)
+			var treeViewState = (TreeViewState)TreeViewController
+				.GetProperty("state", PublicInstance)!
 				.GetValue(treeView);
 			treeViewState.expandedIDs = new List<int>();
 
-			object data = TreeViewController.GetProperty("data", PublicInstance).GetValue(treeView);
+			object data = TreeViewController
+				.GetProperty("data", PublicInstance)!
+				.GetValue(treeView);
 			Type dataSourceType = data.GetType();
-			MethodInfo findItem = dataSourceType.GetMethod("FindItem", PublicInstance);
+			MethodInfo findItem = dataSourceType.GetMethod("FindItem", PublicInstance)!;
 			
 
-			HashSet<int> expandedSet = new HashSet<int>();
-			object[] args1 = new object[1];
+			var expandedSet = new HashSet<int>();
 			foreach (int i in treeViewState.selectedIDs)
 			{
-				args1[0] = i;
-				TreeViewItem item = (TreeViewItem)findItem.Invoke(data, args1);
+				s_args1[0] = i;
+				var item = (TreeViewItem)findItem.Invoke(data, s_args1);
 				if (item == null)
 					continue;
 				TreeViewItem parent = item.parent;
@@ -340,8 +348,8 @@ namespace Vertx
 				}
 			}
 
-			args1[0] = expandedSet.ToArray();
-			dataSourceType.GetMethod("SetExpandedIDs", PublicInstance).Invoke(data, args1);
+			s_args1[0] = expandedSet.ToArray();
+			dataSourceType.GetMethod("SetExpandedIDs", PublicInstance)!.Invoke(data, s_args1);
 		}
 
 
@@ -362,8 +370,7 @@ namespace Vertx
 			if (HierarchyWindow == null)
 				return null;
 			MethodInfo GetExpandedGameObjectsMI =
-				SceneHierarchyWindowType.GetMethod("GetExpandedIDs",
-					NonPublicInstance);
+				SceneHierarchyWindowType.GetMethod("GetExpandedIDs", NonPublicInstance)!;
 			return (int[])GetExpandedGameObjectsMI.Invoke(HierarchyWindow, null);
 		}
 
@@ -383,21 +390,30 @@ namespace Vertx
 		/// </summary>
 		/// <param name="id">An ID associated with the scene view hierarchy.</param>
 		/// <param name="sceneHierarchy"><see cref="SceneHierarchy"/> is passed manually to avoid repeated access in tight loops.</param>
-		/// <returns>The <see cref="Object"/> associated with the <see cref="id"/></returns>
-		public static Object HierarchyIdToObject(int id, object sceneHierarchy = null)
+		/// <param name="associatedObject">The <see cref="Object"/> associated with the <see cref="id"/> if present.</param>
+		/// <param name="associatedScene">The <see cref="Scene"/> associated with the <see cref="id"/> if present.</param>
+		public static void HierarchyIdToObject(int id, out Object associatedObject, out Scene associatedScene, object sceneHierarchy = null)
 		{
 			sceneHierarchy = sceneHierarchy ?? SceneHierarchy;
 			object controller =
-				SceneHierarchyType.GetProperty("treeView", NonPublicInstance)
+				SceneHierarchyType.GetProperty("treeView", NonPublicInstance)!
 					.GetValue(sceneHierarchy);
 			MethodInfo findItemMethod =
-				controller.GetType().GetMethod("FindItem", PublicInstance);
+				controller.GetType().GetMethod("FindItem", PublicInstance)!;
 			object result = findItemMethod.Invoke(controller, new object[] { id });
 			if (result == null)
-				return null;
+			{
+				associatedObject = null;
+				associatedScene = default;
+				return;
+			}
+
 			PropertyInfo objectPptrProperty =
-				result.GetType().GetProperty("objectPPTR", PublicInstance);
-			return (Object)objectPptrProperty.GetValue(result);
+				result.GetType().GetProperty("objectPPTR", PublicInstance)!;
+			PropertyInfo sceneProperty =
+				result.GetType().GetProperty("scene", PublicInstance)!;
+			associatedObject = (Object)objectPptrProperty.GetValue(result);
+			associatedScene = (Scene)sceneProperty.GetValue(result);
 		}
 
 		#endregion

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
 // ReSharper disable ConvertToNullCoalescingCompoundAssignment
@@ -37,10 +38,10 @@ namespace Vertx
 		private static Color BoxBorderColor => new Color(0, 0, 0, 1);
 
 		// Mini white label is used for highlighted content.
-		private static GUIStyle _miniLabelWhite;
+		private static GUIStyle s_miniLabelWhite;
 
 		private static GUIStyle MiniLabelWhite =>
-			_miniLabelWhite ?? (_miniLabelWhite = new GUIStyle(EditorStyles.miniLabel)
+			s_miniLabelWhite ?? (s_miniLabelWhite = new GUIStyle(EditorStyles.miniLabel)
 			{
 				normal = { textColor = Color.white },
 				onNormal = { textColor = Color.white },
@@ -128,12 +129,12 @@ namespace Vertx
 
 			ScrollPosition = 0;
 			TotalSelection.Clear();
-			_currentSelection.Clear();
+			s_currentSelection.Clear();
 			SceneView.RepaintAll();
 		}
 
 		private int _scrollDelta;
-		private static readonly HashSet<GameObject> _currentSelection = new HashSet<GameObject>();
+		private static readonly HashSet<GameObject> s_currentSelection = new HashSet<GameObject>();
 		private int _lastHighlightedIndex = -1;
 		private bool _additionWasLastHeldForPreview;
 		private bool _initialisedPosition;
@@ -172,7 +173,7 @@ namespace Vertx
 			EditorGUI.DrawRect(new Rect(0, 0, Width, 5), GUI.color);
 			EditorGUI.DrawRect(new Rect(0, 6 + Height * TotalSelection.Count, Width, 5), GUI.color);
 
-			Rect separatorTopRect = new Rect(0, 5, Width, 1);
+			var separatorTopRect = new Rect(0, 5, Width, 1);
 			EditorGUI.DrawRect(separatorTopRect, BoxBorderColor);
 
 			for (var i = 0; i < TotalSelection.Count; i++)
@@ -181,10 +182,10 @@ namespace Vertx
 				GameObject gameObject = selectionItem.GameObject;
 				GUIContent[] icons = selectionItem.Icons;
 
-				Rect boxRect = new Rect(0, 5 + 1 + i * Height, Width, Height);
+				var boxRect = new Rect(0, 5 + 1 + i * Height, Width, Height);
 				GUIStyle labelStyle;
 
-				bool isInSelection = _currentSelection.Contains(gameObject);
+				bool isInSelection = s_currentSelection.Contains(gameObject);
 				bool containsMouse = boxRect.Contains(e.mousePosition);
 				if (containsMouse)
 					highlightedIndex = i;
@@ -225,7 +226,7 @@ namespace Vertx
 					}
 				}
 
-				Rect innerBoxRect = new Rect(boxRect.x + 1, boxRect.y, boxRect.width - 2, boxRect.height - 1);
+				var innerBoxRect = new Rect(boxRect.x + 1, boxRect.y, boxRect.width - 2, boxRect.height - 1);
 				EditorGUI.DrawRect(innerBoxRect, GUI.color);
 				GUI.color = Color.white;
 				GUI.Label(new Rect(boxRect.x + 20, boxRect.y, Width - 20, boxRect.height), gameObject.name, labelStyle);
@@ -235,7 +236,7 @@ namespace Vertx
 
 				if (icons.Length > 0)
 				{
-					Rect iconsRect = new Rect(boxRect.x + boxRect.width - width, boxRect.y, width,
+					var iconsRect = new Rect(boxRect.x + boxRect.width - width, boxRect.y, width,
 						Height);
 
 					// Behaviour for scrolling icons when the cursor is over the selection (only if the icon count is greater than MaxIcons)
@@ -249,7 +250,7 @@ namespace Vertx
 
 						float max = icons.Length - maxLength;
 						_iconOffset = Mathf.MoveTowards(_iconOffset, _iconOffsetTarget,
-							(float)(EditorApplication.timeSinceStartup - lastTime));
+							(float)(EditorApplication.timeSinceStartup - _lastTime));
 						if (_iconOffset <= 0)
 						{
 							_iconOffset = 0;
@@ -295,9 +296,9 @@ namespace Vertx
 						{
 							ResetHierarchyToExpandedState(_allExpandedIDs);
 							// Remove the GameObject.
-							Object[] newSelection = new Object[_currentSelection.Count - 1];
-							int n = 0;
-							foreach (GameObject o in _currentSelection)
+							var newSelection = new Object[s_currentSelection.Count - 1];
+							var n = 0;
+							foreach (GameObject o in s_currentSelection)
 							{
 								if (o == gameObject) continue;
 								newSelection[n++] = o;
@@ -309,9 +310,9 @@ namespace Vertx
 						{
 							ResetHierarchyToExpandedStateExcept(gameObject);
 							// Add the GameObject.
-							Object[] newSelection = new Object[_currentSelection.Count + 1];
-							int n = 0;
-							foreach (GameObject o in _currentSelection)
+							var newSelection = new Object[s_currentSelection.Count + 1];
+							var n = 0;
+							foreach (GameObject o in s_currentSelection)
 								newSelection[n++] = o;
 							newSelection[n] = gameObject;
 							Selection.objects = newSelection;
@@ -353,10 +354,10 @@ namespace Vertx
 			if (e.type != EventType.Repaint && e.type != EventType.Layout)
 				e.Use();
 
-			lastTime = EditorApplication.timeSinceStartup;
+			_lastTime = EditorApplication.timeSinceStartup;
 		}
 
-		private double lastTime;
+		private double _lastTime;
 
 		private void EndSelection() => editorWindow.Close();
 
@@ -368,27 +369,27 @@ namespace Vertx
 			ResetHierarchyToExpandedState(_allExpandedIDs);
 			_lastHighlightedIndex = -1;
 			// Revert to _currentSelection
-			Object[] newSelection = new Object[_currentSelection.Count];
-			int n = 0;
-			foreach (GameObject g in _currentSelection)
+			var newSelection = new Object[s_currentSelection.Count];
+			var n = 0;
+			foreach (GameObject g in s_currentSelection)
 				newSelection[n++] = g;
 			Selection.objects = newSelection;
 		}
 
 		private static void ResetCurrentSelection()
 		{
-			_currentSelection.Clear();
-			_currentSelection.UnionWith(Selection.gameObjects);
+			s_currentSelection.Clear();
+			s_currentSelection.UnionWith(Selection.gameObjects);
 		}
 
 		private void MakeSelection(int index, bool isShift)
 		{
 			GameObject gameObject = TotalSelection[index].GameObject;
-			bool selectionContains = _currentSelection.Contains(gameObject);
+			bool selectionContains = s_currentSelection.Contains(gameObject);
 
 			if (isShift)
 			{
-				HashSet<Object> objects = new HashSet<Object>(Selection.objects);
+				var objects = new HashSet<Object>(Selection.objects);
 				if (!selectionContains)
 					objects.Add(gameObject);
 				else
@@ -429,6 +430,9 @@ namespace Vertx
 			NSelection.SetHierarchyToState(new List<int>(expandedIds));
 		}
 
+		/// <summary>
+		/// Resets the hierarchy to the previous state, except expands the new objects and their parents.
+		/// </summary>
 		private static void ResetHierarchyToExpandedStateExcept(GameObject gameObject)
 		{
 			if (_allExpandedIDs == null)
@@ -439,17 +443,27 @@ namespace Vertx
 
 			var newState = new List<int>(_allExpandedIDs);
 
-			HashSet<GameObject> selection = new HashSet<GameObject>();
+			var selection = new HashSet<GameObject>();
 			NSelection.CollectParents(gameObject, selection);
+			Scene gameObjectScene = gameObject.scene;
 
 			object sceneHierarchy = NSelection.SceneHierarchy;
 			int[] expandedState = NSelection.GetHierarchyExpandedState();
 			// Persist the selection in the state.
 			foreach (int i in expandedState)
 			{
-				Object o = NSelection.HierarchyIdToObject(i, sceneHierarchy);
-				if (!selection.Contains(o))
-					continue;
+				NSelection.HierarchyIdToObject(i, out Object o, out Scene scene, sceneHierarchy);
+				if (o != null)
+				{
+					if (!selection.Contains(o))
+						continue;
+				}
+				else
+				{
+					if (!scene.IsValid() || scene != gameObjectScene)
+						continue;
+				}
+				
 				if (!newState.Contains(i))
 					newState.Add(i);
 			}
@@ -478,6 +492,8 @@ namespace Vertx
 					if (!newStateSet.Add(t.gameObject.GetInstanceID()))
 						break;
 				}
+
+				newStateSet.Add(gameObject.scene.GetHashCode());
 			}
 			
 			List<int> newState = newStateSet.ToList();
