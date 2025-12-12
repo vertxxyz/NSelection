@@ -9,10 +9,10 @@ using UnityEditor.Timeline;
 using UnityEngine.Timeline;
 using Object = UnityEngine.Object;
 
-// ReSharper disable UseNegatedPatternInIsExpression
-
-namespace Vertx
+namespace Vertx.Selection.Editor
 {
+	using Selection = UnityEditor.Selection;
+	
 	public partial class NSelection
 	{
 		/// <summary>
@@ -25,7 +25,7 @@ namespace Vertx
 				return;
 
 			TimelineClip[] selectedClips = TimelineEditor.selectedClips;
-			HashSet<TrackAsset> selectedTracks = new HashSet<TrackAsset>();
+			var selectedTracks = new HashSet<TrackAsset>();
 			foreach (TimelineClip clip in selectedClips)
 			{
 #if UNITY_TIMELINE_1_5_2
@@ -42,7 +42,7 @@ namespace Vertx
 					selectedTracks.Add(track);
 			}
 
-			HashSet<TrackAsset> parents = new HashSet<TrackAsset>();
+			var parents = new HashSet<TrackAsset>();
 			foreach (TrackAsset track in selectedTracks)
 				CollectParents(track, parents);
 			SetExpandedStates(asset, parents);

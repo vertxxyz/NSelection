@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -8,8 +9,10 @@ using Object = UnityEngine.Object;
 
 // ReSharper disable ConvertToNullCoalescingCompoundAssignment
 
-namespace Vertx
+namespace Vertx.Selection.Editor
 {
+	using Selection = UnityEditor.Selection;
+
 	internal class SelectionItem
 	{
 		public GameObject GameObject { get; }
@@ -24,7 +27,7 @@ namespace Vertx
 
 	internal class SelectionPopup : PopupWindowContent
 	{
-		public static readonly List<SelectionItem> TotalSelection = new List<SelectionItem>();
+		public static readonly List<SelectionItem> TotalSelection = new();
 		private float _iconOffset;
 		private float _iconOffsetTarget;
 		private static int _currentlyHoveringIndex;
@@ -33,9 +36,9 @@ namespace Vertx
 		private Vector2 _originalPosition;
 		private const int MaxIcons = 7;
 
-		#region Styling
+#region Styling
 
-		private static Color BoxBorderColor => new Color(0, 0, 0, 1);
+		private static Color BoxBorderColor => new(0, 0, 0, 1);
 
 		// Mini white label is used for highlighted content.
 		private static GUIStyle s_miniLabelWhite;
@@ -65,7 +68,7 @@ namespace Vertx
 				onActive = { textColor = Color.black },
 			});
 
-		#endregion
+#endregion
 
 		public SelectionPopup()
 		{
@@ -77,11 +80,7 @@ namespace Vertx
 		public override void OnOpen()
 		{
 			base.OnOpen();
-#if UNITY_2019_1_OR_NEWER
 			SceneView.duringSceneGui += CaptureEvents;
-#else
-			SceneView.onSceneGUIDelegate += CaptureEvents;
-#endif
 			_originalPosition = editorWindow.position.position;
 			editorWindow.wantsMouseMove = true;
 		}
@@ -89,7 +88,7 @@ namespace Vertx
 		public const float Width = 250f;
 		public const float Height = 16f;
 
-		public override Vector2 GetWindowSize() => new Vector2(Width, Height * TotalSelection.Count + 1 + 5 * 2);
+		public override Vector2 GetWindowSize() => new(Width, Height * TotalSelection.Count + 1 + 5 * 2);
 
 		private void CaptureEvents(SceneView sceneView)
 		{
@@ -112,15 +111,8 @@ namespace Vertx
 		{
 			base.OnClose();
 			// Locks the scene view from receiving input for one more frame - which is enough to stop clicking off the UI from selecting a new object.
-			EditorApplication.delayCall += () =>
-			{
-#if UNITY_2019_1_OR_NEWER
-				SceneView.duringSceneGui -= CaptureEvents;
-#else
-				SceneView.onSceneGUIDelegate -= CaptureEvents;
-#endif
-			};
-			
+			EditorApplication.delayCall += () => SceneView.duringSceneGui -= CaptureEvents;
+
 			// Reset visible hierarchy elements to the minimal set
 			ResetHierarchyToExpandedStateIncludingSelection(_initialExpandedIDs);
 
@@ -134,7 +126,7 @@ namespace Vertx
 		}
 
 		private int _scrollDelta;
-		private static readonly HashSet<GameObject> s_currentSelection = new HashSet<GameObject>();
+		private static readonly HashSet<GameObject> s_currentSelection = new();
 		private int _lastHighlightedIndex = -1;
 		private bool _additionWasLastHeldForPreview;
 		private bool _initialisedPosition;
@@ -236,8 +228,11 @@ namespace Vertx
 
 				if (icons.Length > 0)
 				{
-					var iconsRect = new Rect(boxRect.x + boxRect.width - width, boxRect.y, width,
-						Height);
+					var iconsRect = new Rect(boxRect.x + boxRect.width - width,
+						boxRect.y,
+						width,
+						Height
+					);
 
 					// Behaviour for scrolling icons when the cursor is over the selection (only if the icon count is greater than MaxIcons)
 					if (containsMouse && maxLength < icons.Length)
@@ -249,8 +244,10 @@ namespace Vertx
 						}
 
 						float max = icons.Length - maxLength;
-						_iconOffset = Mathf.MoveTowards(_iconOffset, _iconOffsetTarget,
-							(float)(EditorApplication.timeSinceStartup - _lastTime));
+						_iconOffset = Mathf.MoveTowards(_iconOffset,
+							_iconOffsetTarget,
+							(float)(EditorApplication.timeSinceStartup - _lastTime)
+						);
 						if (_iconOffset <= 0)
 						{
 							_iconOffset = 0;
@@ -270,7 +267,8 @@ namespace Vertx
 							GUIContent icon = icons[j];
 							GUI.Label(
 								new Rect(width - (maxLength - j) * Height - _iconOffset * Height, 0, Height, Height),
-								icon);
+								icon
+							);
 						}
 					}
 				}
@@ -414,12 +412,23 @@ namespace Vertx
 			SceneView.RepaintAll();
 		}
 
+#if UNITY_6000_3_OR_NEWER
+		private static EntityId[] _allExpandedIDs;
+		private static EntityId[] _initialExpandedIDs;
+#else
 		private static int[] _allExpandedIDs;
 		private static int[] _initialExpandedIDs;
+#endif
 
 		private static void SetHierarchyExpandedState() => _allExpandedIDs = NSelection.GetHierarchyExpandedState();
 
-		private static void ResetHierarchyToExpandedState(int[] expandedIds)
+		private static void ResetHierarchyToExpandedState(
+#if UNITY_6000_3_OR_NEWER
+			EntityId[] expandedIds
+#else
+			int[] expandedIds
+#endif
+		)
 		{
 			if (expandedIds == null)
 				return;
@@ -427,7 +436,11 @@ namespace Vertx
 			if (NSelection.HierarchyWindow == null)
 				return;
 
+#if UNITY_6000_3_OR_NEWER
+			NSelection.SetHierarchyToState(new List<EntityId>(expandedIds));
+#else
 			NSelection.SetHierarchyToState(new List<int>(expandedIds));
+#endif
 		}
 
 		/// <summary>
@@ -441,16 +454,22 @@ namespace Vertx
 			if (NSelection.HierarchyWindow == null)
 				return;
 
+#if UNITY_6000_3_OR_NEWER
+			var newState = new List<EntityId>(_allExpandedIDs);
+#else
 			var newState = new List<int>(_allExpandedIDs);
+#endif
 
 			var selection = new HashSet<GameObject>();
 			NSelection.CollectParents(gameObject, selection);
 			Scene gameObjectScene = gameObject.scene;
 
 			object sceneHierarchy = NSelection.SceneHierarchy;
-			int[] expandedState = NSelection.GetHierarchyExpandedState();
+			// ReSharper disable once SuggestVarOrType_Elsewhere
+			var expandedState = NSelection.GetHierarchyExpandedState();
 			// Persist the selection in the state.
-			foreach (int i in expandedState)
+			// ReSharper disable once SuggestVarOrType_SimpleTypes
+			foreach (var i in expandedState)
 			{
 				NSelection.HierarchyIdToObject(i, out Object o, out Scene scene, sceneHierarchy);
 				if (o != null)
@@ -463,7 +482,7 @@ namespace Vertx
 					if (!scene.IsValid() || scene != gameObjectScene)
 						continue;
 				}
-				
+
 				if (!newState.Contains(i))
 					newState.Add(i);
 			}
@@ -474,7 +493,13 @@ namespace Vertx
 			NSelection.SetHierarchyToState(newState);
 		}
 
-		private static void ResetHierarchyToExpandedStateIncludingSelection(int[] expandedIds)
+		private static void ResetHierarchyToExpandedStateIncludingSelection(
+#if UNITY_6000_3_OR_NEWER
+			EntityId[] expandedIds
+#else
+			int[] expandedIds
+#endif
+		)
 		{
 			if (expandedIds == null)
 				return;
@@ -482,24 +507,47 @@ namespace Vertx
 			if (NSelection.HierarchyWindow == null)
 				return;
 
+#if UNITY_6000_3_OR_NEWER
+			var newStateSet = new HashSet<EntityId>(expandedIds);
+#else
 			var newStateSet = new HashSet<int>(expandedIds);
+#endif
 			foreach (GameObject gameObject in Selection.gameObjects)
 			{
 				Transform t = gameObject.transform;
 				while (t.parent != null)
 				{
 					t = t.parent;
-					if (!newStateSet.Add(t.gameObject.GetInstanceID()))
+					if (!newStateSet.Add(
+#if UNITY_6000_3_OR_NEWER
+						t.gameObject.GetEntityId()
+#else
+						t.gameObject.GetInstanceID()
+#endif
+						))
 						break;
 				}
 
-				newStateSet.Add(gameObject.scene.GetHashCode());
+				newStateSet.Add(
+#if UNITY_6000_3_OR_NEWER
+					ToEntityId(gameObject.scene.handle)
+#else
+					gameObject.scene.GetHashCode()
+#endif
+					);
 			}
-			
-			List<int> newState = newStateSet.ToList();
+
+			// ReSharper disable once SuggestVarOrType_Elsewhere
+			var newState = newStateSet.ToList();
 			// If unsorted, the hierarchy will break.
 			newState.Sort();
 			NSelection.SetHierarchyToState(newState);
+			
+#if UNITY_6000_3_OR_NEWER
+			EntityId ToEntityId(SceneHandle handle) =>
+				(EntityId)typeof(SceneHandle).GetMethod("ToEntityId", BindingFlags.NonPublic | BindingFlags.Instance)
+					.Invoke(handle, null);
+#endif
 		}
 	}
 }

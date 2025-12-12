@@ -1,9 +1,7 @@
 ﻿/* Thomas Ingram 2018 */
 
 using System;
-#if UNITY_2022_2_OR_NEWER
 using System.Collections;
-#endif
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -15,111 +13,67 @@ using Object = UnityEngine.Object;
 
 // ReSharper disable ConvertToNullCoalescingCompoundAssignment
 
-namespace Vertx
+namespace Vertx.Selection.Editor
 {
-#if !UNITY_2023_3_OR_NEWER
-	[InitializeOnLoad]
-#endif
 	public static partial class NSelection
 	{
-#if !UNITY_2023_3_OR_NEWER
-		static NSelection() => RefreshListeners();
-
-		private static void RefreshListeners()
-		{
-#if UNITY_2019_1_OR_NEWER
-			SceneView.duringSceneGui -= OnSceneGUI;
-			SceneView.duringSceneGui += OnSceneGUI;
-#else
-			SceneView.onSceneGUIDelegate -= OnSceneGUI;
-			SceneView.onSceneGUIDelegate += OnSceneGUI;
-#endif
-		}
-		
-		private static bool s_mouseRightIsDownWithoutDrag;
-#endif
-
 		private const BindingFlags NonPublicInstance = BindingFlags.NonPublic | BindingFlags.Instance;
 		private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
 		private const BindingFlags NonPublicStatic = BindingFlags.Static | BindingFlags.NonPublic;
 		private const BindingFlags PublicStatic = BindingFlags.Static | BindingFlags.Public;
-		
-#if UNITY_2023_3_OR_NEWER
+
 		private const string NSelectionMenuCommand = nameof(NSelection) + "Command";
-		
-		[UnityEditor.ShortcutManagement.Shortcut("Scene View/Show Deep Selection Menu", typeof(SceneView), KeyCode.Mouse1, UnityEditor.ShortcutManagement.ShortcutModifiers.Action)]
+
+		[UnityEditor.ShortcutManagement.Shortcut(
+			"Scene View/Show Deep Selection Menu",
+			typeof(SceneView),
+			KeyCode.Mouse1,
+			UnityEditor.ShortcutManagement.ShortcutModifiers.Action
+		)]
 		private static void ShowDeepSelectionMenu(UnityEditor.ShortcutManagement.ShortcutArguments args)
 		{
 			if (args.context is not SceneView view)
 				return;
-			
+
 			SceneView.duringSceneGui += ShowDeepSelectionMenu;
 			try
 			{
-				var evt = Event.current;
+				Event evt = Event.current;
 
 				view.SendEvent(new Event
-				{
-					commandName = NSelectionMenuCommand,
-					type = EventType.ValidateCommand,
-					mousePosition = evt.mousePosition
-				});
+					{
+						commandName = NSelectionMenuCommand,
+						type = EventType.ValidateCommand,
+						mousePosition = evt.mousePosition
+					}
+				);
 
 				view.SendEvent(new Event
-				{
-					commandName = NSelectionMenuCommand,
-					type = EventType.ExecuteCommand,
-					mousePosition = evt.mousePosition
-				});
-
+					{
+						commandName = NSelectionMenuCommand,
+						type = EventType.ExecuteCommand,
+						mousePosition = evt.mousePosition
+					}
+				);
 			}
 			finally
 			{
 				SceneView.duringSceneGui -= ShowDeepSelectionMenu;
 			}
 		}
-		
+
 		private static void ShowDeepSelectionMenu(SceneView view) => OpenDeepSelectionMenu(view, Event.current);
-#endif
-		
-#if !UNITY_2023_3_OR_NEWER
-		private static void OnSceneGUI(SceneView sceneView)
-		{
-			Event e = Event.current;
-
-			if (e.type == EventType.Used || !e.control || !e.isMouse || e.button != 1 || e.shift || e.alt)
-				return;
-
-			switch (e.rawType)
-			{
-				case EventType.MouseDown:
-					s_mouseRightIsDownWithoutDrag = true;
-					break;
-				case EventType.MouseDrag:
-					s_mouseRightIsDownWithoutDrag = false;
-					break;
-			}
-
-			//The actual CTRL+RIGHT-MOUSE functionality
-			if (!s_mouseRightIsDownWithoutDrag || e.rawType != EventType.MouseUp)
-				return;
-
-			OpenDeepSelectionMenu(sceneView, e);
-		}
-#endif
 
 		private static void OpenDeepSelectionMenu(SceneView sceneView, Event e)
 		{
-#if UNITY_2023_3_OR_NEWER
 			if (e.type == EventType.ValidateCommand && e.commandName == NSelectionMenuCommand)
 				e.Use();
 
-			if(e.type != EventType.ExecuteCommand || e.commandName != NSelectionMenuCommand)
+			if (e.type != EventType.ExecuteCommand || e.commandName != NSelectionMenuCommand)
 				return;
 
 			e.Use();
-#endif
-			
+
 			IEnumerable<GameObject> allOverlapping = GetAllOverlapping(e.mousePosition);
 			List<SelectionItem> totalSelection = SelectionPopup.TotalSelection;
 			totalSelection.Clear();
@@ -165,7 +119,8 @@ namespace Vertx
 
 					//Skip the Transform component because it's always the first object
 					icons[i - 1] = new GUIContent(AssetPreview.GetMiniThumbnail(components[i]),
-						ObjectNames.NicifyVariableName(components[i].GetType().Name));
+						ObjectNames.NicifyVariableName(components[i].GetType().Name)
+					);
 				}
 
 				totalSelection.Add(new SelectionItem(overlapping, icons));
@@ -182,47 +137,35 @@ namespace Vertx
 			else
 				xOffset = 0;
 			int value = Mathf.CeilToInt((selectionPosition.y + SelectionPopup.Height * totalSelection.Count -
-				sceneView.position.height + 10) / SelectionPopup.Height);
+					sceneView.position.height + 10) / SelectionPopup.Height
+			);
 			SelectionPopup.ScrollPosition = Mathf.Max(0, value);
 
 			// Display popup.
 			var buttonRect = new Rect(
 				e.mousePosition.x + xOffset - 1,
 				e.mousePosition.y - 6,
-				0, 0
+				0,
+				0
 			);
 
 			e.alt = false;
-#if !UNITY_2023_3_OR_NEWER
-			s_mouseRightIsDownWithoutDrag = false;
-			e.Use();
-#endif
 
 			PopupWindow.Show(buttonRect, new SelectionPopup());
 
 			// No events after Show. ExitGUI is called.
 		}
 
-		#region Overlapping
+#region Overlapping
 
 		private static IEnumerable<GameObject> GetAllOverlapping(Vector2 position)
 		{
-#if !UNITY_2022_2_OR_NEWER
-			return _getAllOverlapping.Invoke(position);
-		}
-
-		private static readonly Func<Vector2, IEnumerable<GameObject>> _getAllOverlapping =
-			(Func<Vector2, IEnumerable<GameObject>>)Delegate.CreateDelegate(
-				typeof(Func<Vector2, IEnumerable<GameObject>>),
-				SceneViewPickingClass.GetMethod("GetAllOverlapping", NonPublicStatic)
-			);
-#else
 			s_args1[0] = position;
 			var results = (IEnumerable)GetAllOverlappingMethod.Invoke(null, s_args1);
 			foreach (object o in results)
 			{
 				var target = (Object)PickingObjectTarget.GetValue(o);
-				if(target == null)
+				if (target == null)
 					continue;
 				switch (target)
 				{
@@ -240,33 +183,46 @@ namespace Vertx
 
 		private static MethodInfo s_getAllOverlappingMethod;
 		private static MethodInfo GetAllOverlappingMethod => s_getAllOverlappingMethod ??= SceneViewPickingClass.GetMethod("GetAllOverlapping", NonPublicStatic);
-		
+
 		private static PropertyInfo s_pickingObjectTarget;
 		private static PropertyInfo PickingObjectTarget => s_pickingObjectTarget ??= Type.GetType("UnityEditor.PickingObject,UnityEditor")!.GetProperty("target", PublicInstance);
-#endif
 
 		private static Type s_sceneViewPickingClass;
+
 		private static Type SceneViewPickingClass => s_sceneViewPickingClass ??
-		                                             (s_sceneViewPickingClass =
-			                                             Type.GetType("UnityEditor.SceneViewPicking,UnityEditor"));
+			(s_sceneViewPickingClass =
+				Type.GetType("UnityEditor.SceneViewPicking,UnityEditor"));
 
-		#endregion
+#endregion
 
-		#region Hierarchy Window Manipulation
+#region Hierarchy Window Manipulation
 
 		private static Type s_sceneHierarchyType;
+
 		private static Type SceneHierarchyType => s_sceneHierarchyType ??
-		                                          (s_sceneHierarchyType =
-			                                          Type.GetType("UnityEditor.SceneHierarchy,UnityEditor"));
+			(s_sceneHierarchyType =
+				Type.GetType("UnityEditor.SceneHierarchy,UnityEditor"));
+
 		private static Type s_sceneHierarchyWindowType;
+
 		private static Type SceneHierarchyWindowType => s_sceneHierarchyWindowType ??
-		                                                (s_sceneHierarchyWindowType =
-			                                                Type.GetType(
-				                                                "UnityEditor.SceneHierarchyWindow,UnityEditor"));
+			(s_sceneHierarchyWindowType =
+				Type.GetType(
+					"UnityEditor.SceneHierarchyWindow,UnityEditor"
+				));
+
 		private static Type s_treeViewController;
-		private static Type TreeViewController => s_treeViewController ?? (s_treeViewController =
-			Type.GetType("UnityEditor.IMGUI.Controls.TreeViewController,UnityEditor"));
+
+		private static Type TreeViewControllerInt => s_treeViewController ?? (s_treeViewController =
+			Type.GetType("UnityEditor.IMGUI.Controls.TreeViewController`1,UnityEditor")!.MakeGenericType(typeof(int)));
+
+#if UNITY_6000_3_OR_NEWER
+		private static Type TreeViewControllerEntity => s_treeViewController ?? (s_treeViewController =
+			Type.GetType("UnityEditor.IMGUI.Controls.TreeViewController`1,UnityEditor")!.MakeGenericType(typeof(EntityId)));
+#endif
+
 		private static EditorWindow s_hierarchyWindow;
+
 		public static EditorWindow HierarchyWindow =>
 			s_hierarchyWindow == null ? s_hierarchyWindow = GetHierarchyWindow() : s_hierarchyWindow;
 
@@ -278,39 +234,66 @@ namespace Vertx
 		/// </summary>
 		/// <param name="state">A list of ids representing items in the hierarchy.</param>
 		/// <param name="sceneHierarchy"><see cref="SceneHierarchy"/></param>
-		public static void SetHierarchyToState(List<int> state, object sceneHierarchy = null)
+		public static void SetHierarchyToState(
+#if UNITY_6000_3_OR_NEWER
+			List<EntityId> state,
+#else
+			List<int> state,
+#endif
+			object sceneHierarchy = null
+		)
 		{
 			sceneHierarchy = sceneHierarchy ?? SceneHierarchy;
-			
-			var treeViewState = (TreeViewState)SceneHierarchyType
+
+
+#if UNITY_6000_3_OR_NEWER
+			var treeViewState = (TreeViewState<EntityId>)SceneHierarchyType
+#else
+			var treeViewState = (TreeViewState<int>)SceneHierarchyType
+#endif
 				.GetProperty("treeViewState", NonPublicInstance)!
 				.GetValue(sceneHierarchy);
-			
+
 			treeViewState.expandedIDs = state;
-			
+
 			// Reload the state data because otherwise the tree view does not actually collapse.
-			MethodInfo reloadData = TreeViewController.GetMethod("ReloadData")!;
+
+			MethodInfo reloadData =
+#if UNITY_6000_3_OR_NEWER
+				TreeViewControllerEntity
+#else
+				TreeViewControllerInt
+#endif
+					.GetMethod("ReloadData")!;
 			reloadData.Invoke(
 				SceneHierarchyType.GetProperty("treeView", NonPublicInstance)!
 					.GetValue(sceneHierarchy),
 				null
 			);
 		}
-		
-		private static void FocusGenericHierarchyWithProperty(object stateParent,
+
+		private static void FocusGenericHierarchyWithProperty(
+			object stateParent,
 			string treeViewPropertyName,
-			BindingFlags flags = NonPublicInstance)
+			BindingFlags flags = NonPublicInstance
+		)
 		{
 			Type windowType = stateParent.GetType();
 			object treeView = windowType
 				.GetProperty(treeViewPropertyName, flags)!
 				.GetValue(stateParent);
+#if UNITY_6000_3_OR_NEWER
+			FocusEntityHierarchy(treeView);
+#else
 			FocusGenericHierarchy(treeView);
+#endif
 		}
 
-		private static void FocusGenericHierarchyWithField(object window,
+		private static void FocusGenericHierarchyWithField(
+			object window,
 			string treeViewFieldName,
-			BindingFlags flags = NonPublicInstance)
+			BindingFlags flags = NonPublicInstance
+		)
 		{
 			Type windowType = window.GetType();
 			object treeView = windowType
@@ -318,29 +301,29 @@ namespace Vertx
 				.GetValue(window);
 			FocusGenericHierarchy(treeView);
 		}
-		
+
 		private static void FocusGenericHierarchy(object treeView)
 		{
-			var treeViewState = (TreeViewState)TreeViewController
+			var treeViewState = (TreeViewState<int>)TreeViewControllerInt
 				.GetProperty("state", PublicInstance)!
 				.GetValue(treeView);
 			treeViewState.expandedIDs = new List<int>();
 
-			object data = TreeViewController
+			object data = TreeViewControllerInt
 				.GetProperty("data", PublicInstance)!
 				.GetValue(treeView);
 			Type dataSourceType = data.GetType();
 			MethodInfo findItem = dataSourceType.GetMethod("FindItem", PublicInstance)!;
-			
+
 
 			var expandedSet = new HashSet<int>();
 			foreach (int i in treeViewState.selectedIDs)
 			{
 				s_args1[0] = i;
-				var item = (TreeViewItem)findItem.Invoke(data, s_args1);
+				var item = (TreeViewItem<int>)findItem.Invoke(data, s_args1);
 				if (item == null)
 					continue;
-				TreeViewItem parent = item.parent;
+				TreeViewItem<int> parent = item.parent;
 				while (parent != null)
 				{
 					expandedSet.Add(parent.id);
@@ -351,6 +334,41 @@ namespace Vertx
 			s_args1[0] = expandedSet.ToArray();
 			dataSourceType.GetMethod("SetExpandedIDs", PublicInstance)!.Invoke(data, s_args1);
 		}
+
+#if UNITY_6000_3_OR_NEWER
+		private static void FocusEntityHierarchy(object treeView)
+		{
+			var treeViewState = (TreeViewState<EntityId>)TreeViewControllerEntity
+				.GetProperty("state", PublicInstance)!
+				.GetValue(treeView);
+			treeViewState.expandedIDs = new List<EntityId>();
+
+			object data = TreeViewControllerEntity
+				.GetProperty("data", PublicInstance)!
+				.GetValue(treeView);
+			Type dataSourceType = data.GetType();
+			MethodInfo findItem = dataSourceType.GetMethod("FindItem", PublicInstance)!;
+
+
+			var expandedSet = new HashSet<EntityId>();
+			foreach (EntityId i in treeViewState.selectedIDs)
+			{
+				s_args1[0] = i;
+				var item = (TreeViewItem<EntityId>)findItem.Invoke(data, s_args1);
+				if (item == null)
+					continue;
+				TreeViewItem<EntityId> parent = item.parent;
+				while (parent != null)
+				{
+					expandedSet.Add(parent.id);
+					parent = parent.parent;
+				}
+			}
+
+			s_args1[0] = expandedSet.ToArray();
+			dataSourceType.GetMethod("SetExpandedIDs", PublicInstance)!.Invoke(data, s_args1);
+		}
+#endif
 
 
 		private static EditorWindow GetHierarchyWindow()
@@ -365,13 +383,21 @@ namespace Vertx
 		/// Gets the expanded state of the hierarchy window.
 		/// </summary>
 		/// <returns>IDs representing expanded hierarchy items.</returns>
+#if UNITY_6000_3_OR_NEWER
+		public static EntityId[] GetHierarchyExpandedState()
+#else
 		public static int[] GetHierarchyExpandedState()
+#endif
 		{
 			if (HierarchyWindow == null)
 				return null;
-			MethodInfo GetExpandedGameObjectsMI =
+			MethodInfo getExpandedGameObjects =
 				SceneHierarchyWindowType.GetMethod("GetExpandedIDs", NonPublicInstance)!;
-			return (int[])GetExpandedGameObjectsMI.Invoke(HierarchyWindow, null);
+#if UNITY_6000_3_OR_NEWER
+			return (EntityId[])getExpandedGameObjects.Invoke(HierarchyWindow, null);
+#else
+			return (int[])getExpandedGameObjects.Invoke(HierarchyWindow, null);
+#endif
 		}
 
 		internal static void CollectParents(GameObject gameObject, HashSet<GameObject> result)
@@ -392,7 +418,16 @@ namespace Vertx
 		/// <param name="sceneHierarchy"><see cref="SceneHierarchy"/> is passed manually to avoid repeated access in tight loops.</param>
 		/// <param name="associatedObject">The <see cref="Object"/> associated with the <see cref="id"/> if present.</param>
 		/// <param name="associatedScene">The <see cref="Scene"/> associated with the <see cref="id"/> if present.</param>
-		public static void HierarchyIdToObject(int id, out Object associatedObject, out Scene associatedScene, object sceneHierarchy = null)
+		public static void HierarchyIdToObject(
+#if UNITY_6000_3_OR_NEWER
+			EntityId id,
+#else
+			int id,
+#endif
+			out Object associatedObject,
+			out Scene associatedScene,
+			object sceneHierarchy = null
+		)
 		{
 			sceneHierarchy = sceneHierarchy ?? SceneHierarchy;
 			object controller =
@@ -416,6 +451,6 @@ namespace Vertx
 			associatedScene = (Scene)sceneProperty.GetValue(result);
 		}
 
-		#endregion
+#endregion
 	}
 }

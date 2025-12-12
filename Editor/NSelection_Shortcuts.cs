@@ -1,11 +1,9 @@
 using System;
-#if !UNITY_2022_1_OR_NEWER
-using System.Collections;
-#endif
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using JetBrains.Annotations;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEditor.ShortcutManagement;
@@ -13,11 +11,13 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
-using TreeView = UnityEditor.IMGUI.Controls.TreeView;
+using TreeView = UnityEditor.IMGUI.Controls.TreeView<int>;
 using UIToolkit = UnityEngine.UIElements;
 
-namespace Vertx
+namespace Vertx.Selection.Editor
 {
+	using Selection = UnityEditor.Selection;
+
 	public partial class NSelection
 	{
 		/// <summary>
@@ -30,8 +30,13 @@ namespace Vertx
 				return;
 			object sceneHierarchy = SceneHierarchy;
 
-			int[] expandedState = GetHierarchyExpandedState();
+			// ReSharper disable once SuggestVarOrType_Elsewhere
+			var expandedState = GetHierarchyExpandedState();
+#if UNITY_6000_3_OR_NEWER
+			var newState = new List<EntityId>();
+#else
 			var newState = new List<int>();
+#endif
 
 			// Collect selection and objects up to the root.
 			var selection = new HashSet<GameObject>();
@@ -44,7 +49,8 @@ namespace Vertx
 			}
 
 			// Persist the selection in the state.
-			foreach (int i in expandedState)
+			// ReSharper disable once SuggestVarOrType_SimpleTypes
+			foreach (var i in expandedState)
 			{
 				HierarchyIdToObject(i, out Object o, out Scene scene, sceneHierarchy);
 				if (selection.Contains(o) || scene.IsValid() && scenes.Contains(scene))
@@ -63,7 +69,11 @@ namespace Vertx
 			if (HierarchyWindow == null)
 				return;
 
+#if UNITY_6000_3_OR_NEWER
+			SetHierarchyToState(new List<EntityId>());
+#else
 			SetHierarchyToState(new List<int>());
+#endif
 		}
 
 		[Shortcut("Project Browser/Create/Script")]
@@ -119,6 +129,11 @@ namespace Vertx
 						FocusTimelineWindowToSelection();
 						return;
 #endif
+#if UNITY_ENTITIES
+					case "Unity.Entities.Editor.HierarchyWindow":
+						FocusEntitiesHierarchyToSelection(focusedWindow);
+						return;
+#endif
 					case "UnityEditor.UIElements.Debugger.UIElementsDebugger":
 						FocusUIToolkitDebuggerToSelection(focusedWindow);
 						return;
@@ -151,6 +166,7 @@ namespace Vertx
 		/// The target hierarchy is determined by the current inspector's focused object.
 		/// This is either the scene view hierarchy, or the project view.
 		/// </summary>
+		[PublicAPI]
 		public static void FocusInspectorWindowToSelection(EditorWindow inspectorWindow)
 		{
 			object inspectedObject = inspectorWindow.GetType()
@@ -163,7 +179,7 @@ namespace Vertx
 					Object[] projectBrowsers = Resources.FindObjectsOfTypeAll(Type.GetType("UnityEditor.ProjectBrowser,UnityEditor"));
 					foreach (Object projectBrowser in projectBrowsers)
 					{
-						if (!(projectBrowser is EditorWindow editorWindow))
+						if (projectBrowser is not EditorWindow editorWindow)
 							continue;
 						FocusProjectBrowserToSelection(editorWindow);
 						editorWindow.Repaint();
@@ -179,6 +195,7 @@ namespace Vertx
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
+		[PublicAPI]
 		public static void FocusHierarchyViewToSelection(bool forceRepaint = false)
 		{
 			if (HierarchyWindow == null)
@@ -193,6 +210,7 @@ namespace Vertx
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
+		[PublicAPI]
 		public static void FocusProfilerWindowToSelection(EditorWindow profilerWindow)
 		{
 			var interfaceType = Type.GetType("UnityEditorInternal.IProfilerWindowController,UnityEditor")!;
@@ -236,6 +254,7 @@ namespace Vertx
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
+		[PublicAPI]
 		public static void FocusProjectBrowserToSelection(EditorWindow projectBrowser)
 		{
 			Type windowType = projectBrowser.GetType();
@@ -246,19 +265,28 @@ namespace Vertx
 				.GetField("m_AssetTree", NonPublicInstance)!
 				.GetValue(projectBrowser);
 
+#if UNITY_6000_3_OR_NEWER
+			if (folderTree != null)
+				FocusEntityHierarchy(folderTree);
+
+			if (assetTreeTree != null)
+				FocusEntityHierarchy(assetTreeTree);
+#else
 			if (folderTree != null)
 				FocusGenericHierarchy(folderTree);
 
 			if (assetTreeTree != null)
 				FocusGenericHierarchy(assetTreeTree);
+#endif
 		}
 
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
+		[PublicAPI]
 		public static void FocusAnimationWindowToSelection(EditorWindow animationWindow)
 		{
-			object animEditor = animationWindow.GetType().GetProperty("animEditor", NonPublicInstance)!
+			object animEditor = typeof(AnimationWindow).GetProperty("animEditor", NonPublicInstance)!
 				.GetValue(animationWindow);
 			object animationWindowHierarchy =
 				animEditor.GetType()
@@ -274,19 +302,17 @@ namespace Vertx
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
+		[PublicAPI]
 		public static void FocusUIToolkitDebuggerToSelection(EditorWindow uitoolkitDebugger)
 		{
-#if UNITY_2022_1_OR_NEWER
 			var treeView = (UIToolkit.TreeView)uitoolkitDebugger.rootVisualElement.Q(null, "unity-tree-view");
-#else
-			object treeView = uitoolkitDebugger.rootVisualElement.Q("unity-tree-view__list-view", "unity-tree-view__list-view").parent;
-#endif
 			TreeViewFocusSelection(treeView);
 		}
 
 		/// <summary>DD
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
+		[PublicAPI]
 		public static void FocusFrameDebuggerToSelection(EditorWindow frameDebugger)
 		{
 			FieldInfo treeView = frameDebugger.GetType().GetField("m_TreeView", NonPublicInstance);
@@ -295,12 +321,14 @@ namespace Vertx
 
 			FocusGenericHierarchyWithField(
 				treeView!.GetValue(frameDebugger),
-				"m_TreeView");
+				"m_TreeView"
+			);
 		}
 
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
+		[PublicAPI]
 		public static void FocusAudioMixerToSelection(EditorWindow audioMixerWindow)
 		{
 			FieldInfo groupTree = audioMixerWindow.GetType().GetField("m_GroupTree", NonPublicInstance);
@@ -308,7 +336,8 @@ namespace Vertx
 			{
 				FocusGenericHierarchyWithField(
 					groupTree.GetValue(audioMixerWindow),
-					"m_AudioGroupTree");
+					"m_AudioGroupTree"
+				);
 			}
 
 			object mixerTree = audioMixerWindow.GetType().GetField("m_MixersTree", NonPublicInstance)!
@@ -317,73 +346,28 @@ namespace Vertx
 			{
 				FocusGenericHierarchyWithField(
 					mixerTree,
-					"m_TreeView");
+					"m_TreeView"
+				);
 			}
 		}
 
 		/// <summary>
 		/// Sets the hierarchy's expanded state to only contain the current selection.
 		/// </summary>
+		[PublicAPI]
 		public static void FocusUIBuilderToSelection(EditorWindow uiBuilder)
 		{
-#if UNITY_2022_1_OR_NEWER
 			var treeView = (UIToolkit.TreeView)uiBuilder.rootVisualElement.Q("hierarchy").Q("explorer-container")[0];
-#else
-			object treeView = uiBuilder.rootVisualElement.Q("hierarchy").Q("explorer-container")[0];
-#endif
 			TreeViewFocusSelection(treeView);
 		}
 
-#if UNITY_2022_1_OR_NEWER
 		private static void TreeViewFocusSelection(UIToolkit.TreeView treeView)
 		{
-			int[] selection =
-				((List<int>)typeof(UIToolkit.TreeView)
-					.GetProperty("currentSelectionIds", NonPublicInstance)!
-					.GetValue(treeView)).ToArray();
+			int[] selection = treeView.selectedIds.ToArray();
 			treeView.ClearSelection();
 			treeView.CollapseAll();
 			treeView.SetSelectionById(selection);
 		}
-#else
-		private static void TreeViewFocusSelection(object treeView)
-		{
-			var treeViewItemType = Type.GetType("UnityEngine.UIElements.ITreeViewItem,UnityEngine.UIElementsModule");
-			// Collect parents to expand.
-			PropertyInfo idProperty = treeViewItemType.GetProperty("id", PublicInstance);
-			PropertyInfo parentProperty = treeViewItemType.GetProperty("parent", PublicInstance);
-			Type treeViewType = treeView.GetType();
-			IEnumerable selection = (IEnumerable)treeViewType.GetProperty(
-#if UNITY_2020_1_OR_NEWER
-				"selectedItems",
-#else
-				"currentSelection",
-#endif
-				PublicInstance
-			).GetValue(treeView);
-
-			// Collect parents from selection.
-			HashSet<int> parentIds = new HashSet<int>();
-			foreach (object o in selection)
-			{
-				for (object parent = parentProperty.GetValue(o);
-				     parent != null;
-				     parent = parentProperty.GetValue(parent))
-				{
-					if (!parentIds.Add((int)idProperty.GetValue(parent)))
-						break;
-				}
-			}
-
-			var expandedIds =
-				(List<int>)treeViewType.GetField("m_ExpandedItemIds", NonPublicInstance).GetValue(treeView);
-			expandedIds.Clear();
-			expandedIds.AddRange(parentIds);
-			expandedIds.Sort();
-
-			treeViewType.GetMethod("Refresh", PublicInstance).Invoke(treeView, null);
-		}
-#endif
 
 		/// <summary>
 		/// Toggles the Scene view gizmos.
