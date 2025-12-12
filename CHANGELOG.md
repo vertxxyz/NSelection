@@ -1,8 +1,23 @@
 # Changelog
 All notable changes to this package will be documented in this file.
 
-The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
+The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+
+## [1.5.0]
+### Added
+- Added support for 6000.3.
+
+## [1.4.0]
+### Added
+- Added support for 6000.2.
+
+### Removed
+- Removed all code relating to versions below 6000.2. Use version 1.3.1 for previous editor releases.
+
+### Changed
+- Renamed assembly from `nSelection` to `Vertx.Selection.Editor`.
+- Renamed namespace from `Vertx` to `Vertx.Selection.Editor`.
 
 ## [1.3.1]
 - Fixed issue where scenes would not remain expanded after making a selection.
